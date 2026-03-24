@@ -1,6 +1,20 @@
+// frontend/client/src/app/login/page.tsx
+"use client"; // <-- Add this at the very top
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  const handleMockLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // In a real app, you would validate credentials here
+    console.log("Logged in with dummy account!");
+    // Redirect to the marketplace
+    router.push("/marketplace");
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-900">
       
@@ -8,7 +22,8 @@ export default function LoginPage() {
         
         <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Login</h1>
         
-        <form className="w-full flex flex-col gap-4">
+        {/* Attach the onSubmit handler here */}
+        <form onSubmit={handleMockLogin} className="w-full flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Email</label>
             <input 
@@ -27,7 +42,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <button className="bg-brand-primary text-white p-2.5 rounded-md hover:bg-brand-secondary font-medium transition-colors mt-2 shadow-lg shadow-brand-primary/20">
+          <button type="submit" className="bg-brand-primary text-white p-2.5 rounded-md hover:bg-brand-secondary font-medium transition-colors mt-2 shadow-lg shadow-brand-primary/20">
             Log In
           </button>
         </form>

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Hero() {
   return (
-    <div className="relative pt-32 pb-20 sm:pt-40 sm:pb-24 overflow-hidden bg-[var(--background)]">
+    <div className="relative pt-32 pb-20 sm:pt-40 sm:pb-24 overflow-hidden bg-[--background]">
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-gray-900 mb-8">
           Build faster with <br />
