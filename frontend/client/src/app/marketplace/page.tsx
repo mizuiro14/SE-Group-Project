@@ -7,27 +7,49 @@ const BARLEY_ITEMS = [
   { id: 6, name: "Black Barley", price: "$8.50/lb", description: "An heirloom variety that retains its striking dark color when cooked." },
 ];
 
-export default function MarketplacePage() {
+export default async function MarketplacePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  const query = resolvedSearchParams.q?.toLowerCase() || '';
+  // Filter items based on whether the name or description matches the search query
+  const filteredItems = BARLEY_ITEMS.filter(
+    (item) => 
+      item.name.toLowerCase().includes(query) || 
+      item.description.toLowerCase().includes(query)
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
-      
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Barley Marketplace</h1>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {BARLEY_ITEMS.map((item) => (
-             <div key={item.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-               <h2 className="text-xl font-semibold text-gray-900 mb-2">{item.name}</h2>
-               <p className="text-gray-600 mb-4 h-16">{item.description}</p>
-               <div className="flex items-center justify-between mt-auto">
-                 <span className="font-bold text-lg text-gray-900">{item.price}</span>
-                 <button className="px-4 py-2 text-sm font-semibold text-white bg-brand-secondary bg-blue-600 rounded hover:bg-blue-700">
-                   Add to Cart
-                 </button>
+        {query && (
+          <p className="mb-6 text-gray-600">
+            Showing results for <span className="font-semibold">"{query}"</span>
+          </p>
+        )}
+
+        {filteredItems.length === 0 ? (
+          <p className="text-gray-500">No items found matching your search.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredItems.map((item) => (
+               <div key={item.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                 <h2 className="text-xl font-semibold text-gray-900 mb-2">{item.name}</h2>
+                 <p className="text-gray-600 mb-4 h-16 line-clamp-2">{item.description}</p>
+                 <div className="flex items-center justify-between mt-auto">
+                   <span className="font-bold text-lg text-gray-900">{item.price}</span>
+                   <button className="px-4 py-2 text-sm font-semibold text-white bg-brand-secondary rounded hover:bg-brand-tertiary transition-colors">
+                     Add to Cart
+                   </button>
+                 </div>
                </div>
-             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );
