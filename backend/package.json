@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "start": "ts-node src/server.ts",
+    "dev": "nodemon --exec ts-node src/server.ts"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.0",
     "cors": "^2.8.6",
