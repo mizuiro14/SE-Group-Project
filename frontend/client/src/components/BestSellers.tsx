@@ -10,10 +10,10 @@ const products = [
 export default function BestSellers() {
   return (
     // Removed bg-gray-50, now using bg-transparent (implied) to show body background
-    <section className="py-24 bg-[var(--foreground)]">
+    <section className="py-24 bg-(--foreground)">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Changed text color to white or dark brand color for better contrast against green background */}
-        <h2 className="text-3xl font-bold text-brand-secondary mb-12 text-center">
+        <h2 className="text-3xl font-bold text-white mb-12 text-center">
           Best Sellers
         </h2>
         
@@ -21,7 +21,7 @@ export default function BestSellers() {
           {products.map((product) => (
             <div key={product.id} className="group bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm hover:shadow-xl transition-all duration-300 border border-white/20">
               {/* Skeleton Image Placeholder */}
-              <div className="aspect-[4/5] w-full bg-gray-100 rounded-xl mb-4 animate-pulse group-hover:bg-gray-200 transition-colors"></div>
+              <div className="aspect-4/5 w-full bg-gray-100 rounded-xl mb-4 animate-pulse group-hover:bg-gray-200 transition-colors"></div>
               
               <div className="space-y-2">
                 {/* Updated text colors to match brand */}
