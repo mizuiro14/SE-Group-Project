@@ -1,4 +1,5 @@
 import { supabase } from '../SupabaseClient';
+import { createUser } from './userService';
 
 export const signup = async (email: string, password: string, username: string) => {
     const { data, error } = await supabase.auth.signUp({
@@ -10,6 +11,15 @@ export const signup = async (email: string, password: string, username: string) 
     });
 
     if (error) throw new Error(error.message);
+
+    // Also create user in users table
+    try {
+        await createUser({ email, username });
+    } catch (err: any) {
+        console.error('Error creating user in users table:', err.message);
+        // Don't throw - auth was successful, users table creation is secondary
+    }
+
     return data;
 };
 
