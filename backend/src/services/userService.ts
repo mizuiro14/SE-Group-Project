@@ -3,7 +3,9 @@ import { supabase } from '../SupabaseClient';
 export type User = {
     id?: number;
     username: string;
-    email: string;
+    user_email: string;
+    cellphone_number?: string;
+    role?: string;
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -23,9 +25,20 @@ export const searchUser = async (query: string): Promise<User[]> => {
         .from("users")
         .select("*")
         .ilike("username", `%${query}%`);
-    
+
     if (error) throw new Error(error.message);
-    return data || []
+    return data || [];
+};
+
+export const searchUserByEmail = async (userEmail: string): Promise<User | null> => {
+    const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("user_email", userEmail)
+        .single();
+
+    if (error && error.code !== 'PGRST116') throw new Error(error.message);
+    return data || null;
 };
 
 export const createUser = async (userData: User | User[]): Promise<User[]> => {
@@ -46,5 +59,6 @@ export const createUser = async (userData: User | User[]): Promise<User[]> => {
 export default {
     getUsers,
     createUser,
-    searchUser
+    searchUser,
+    searchUserByEmail
 };

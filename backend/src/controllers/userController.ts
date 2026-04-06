@@ -16,10 +16,10 @@ export const createUser = async (req: Request, res: Response) => {
 
     const usersToValidate = Array.isArray(userData) ? userData : [userData];
 
-    const invalidUser = usersToValidate.find(u => !u.username || !u.email);
+    const invalidUser = usersToValidate.find(u => !u.username || !u.user_email);
 
     if (invalidUser) {
-        res.status(400).json({ error: 'Username and email are required for all users' });
+        res.status(400).json({ error: 'Username and user_email are required for all users' });
         return;
     }
 
@@ -37,20 +37,20 @@ export const searchUser = async (req: Request, res: Response) => {
 
     if (!search) {
         res.status(400).json({ error: 'A search input is required' });
-        return
+        return;
     }
 
     try {
         const users = await userService.searchUser(search);
-        res.json(users)
+        res.json(users);
     } catch (err: any) {
-        res.status(500).json({ error: err.message })
+        res.status(500).json({ error: err.message });
     }
-}
+};
 
 // ! TEMPORARY
 export default {
     getUsers,
     createUser,
     searchUser,
-}
+};
