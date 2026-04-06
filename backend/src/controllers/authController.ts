@@ -3,7 +3,8 @@ import authService from '../services/authService';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 export const signup = async (req: Request, res: Response): Promise<void> => {
-    const { email, password, username } = req.body;
+    // 1. Add contact, role, and branch to the destructuring
+    const { email, password, username, contact, role, branch } = req.body;
 
     if (!email || !password || !username) {
         res.status(400).json({ error: 'Email, password, and username are required' });
@@ -11,7 +12,9 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     }
 
     try {
-        const data = await authService.signup(email, password, username);
+        // 2. Pass those values to the authService
+        const data = await authService.signup(email, password, username, contact, role, branch);
+        
         res.status(201).json({
             message: 'Signup successful. Check your email for a confirmation link.',
             user: data.user,
