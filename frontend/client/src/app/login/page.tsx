@@ -20,6 +20,7 @@ export default function LoginPage() {
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // <-- IMPORTANT: Tell fetch to receive the cookie
         body: JSON.stringify(formData),
       });
 
@@ -31,15 +32,12 @@ export default function LoginPage() {
         throw new Error("Server returned an invalid response. Is the backend running?");
       } 
 
-      if (!res.ok) throw new Error(data.error || "Failed to log in");
+      if (!res.ok) throw new Error(data?.error || "Failed to log in");
 
-      // Save token to localStorage to keep the user logged in
-      if (data.session?.access_token) {
-        localStorage.setItem("token", data.session.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-      }
-
+      // The browser automatically caught the secure HTTP-only Set-Cookie header.
+      // Simply redirect the user.
       router.push("/marketplace");
+      
     } catch (err: any) {
       setError(err.message);
     } finally {

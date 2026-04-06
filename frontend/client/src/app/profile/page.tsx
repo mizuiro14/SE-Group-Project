@@ -1,22 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    // Grab the logged-in user from localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+    // 1. Fetch user from the backend /me endpoint using the secure cookie
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/auth/me", {
+          method: "GET",
+          credentials: "include", // <-- IMPORTANT: Sends the HTTP-only cookie
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        } else {
+          // If the cookie is missing or invalid, boot them back to login
+          router.push('/login'); 
+        }
+      } catch (err) {
+        console.error("Error fetching user data", err);
+      }
+    };
+
+    fetchUser();
+  }, [router]);
 
   // Dummy data to replicate the wireframe grid
   const itemsSelling = Array(6).fill("insert product name");
 
-  // Extract variables for cleaner JSX
+  // Extract variables for cleaner JSX safely (wait until user loads)
+  if (!user) return <div className="text-center pt-20">Loading profile...</div>;
+
   const username = user?.user_metadata?.username || 'Guest User';
   const userRole = user?.user_metadata?.role || 'buyer'; // default to buyer if missing
   const contact = user?.user_metadata?.contact || 'No contact provided';

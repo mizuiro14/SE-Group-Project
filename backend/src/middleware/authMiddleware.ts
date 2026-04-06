@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import authService from '../services/authService';
 
 export interface AuthenticatedRequest extends Request {
-    user?: { id: string; email?: string; };
+    user?: any; // Changed to accept the full Supabase user object including user_metadata
 }
 
 export const authenticate = async (
@@ -10,18 +10,20 @@ export const authenticate = async (
     res: Response,
     next: NextFunction
 ): Promise<void> => {
-    const authHeader = req.headers.authorization;
+    // 1. Read the token from the HTTP-only cookie instead of req.headers
+    const token = req.cookies?.access_token;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Missing or invalid authorization header' });
+    if (!token) {
+        res.status(401).json({ error: 'Missing or invalid authorization cookie' });
         return;
     }
 
-    const token = authHeader.split(' ')[1];
-
     try {
+        // 2. Fetch user from Supabase using the token
         const user = await authService.getUser(token);
-        req.user = { id: user.id, email: user.email ?? undefined };
+        
+        // 3. Attach the entire user object so we keep user_metadata (role, branch, etc.)
+        req.user = user; 
         next();
     } catch {
         res.status(401).json({ error: 'Invalid or expired token' });

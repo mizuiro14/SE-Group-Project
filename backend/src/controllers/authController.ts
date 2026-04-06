@@ -35,9 +35,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     try {
         const data = await authService.login(email, password);
+        
+        // --- NEW COOKIE LOGIC ---
+        // Securely attach the token as an HTTP-only cookie
+        if (data.session) {
+            res.cookie('access_token', data.session.access_token, {
+                httpOnly: true, // Prevents JavaScript/XSS attacks from reading the cookie
+                secure: process.env.NODE_ENV === 'production', // Uses HTTPS in production
+                sameSite: 'lax',
+                maxAge: 3600 * 1000 // Expires in 1 hour
+            });
+        }
+
         res.status(200).json({
-            user: data.user,
-            session: data.session,
+            user: data.user
         });
     } catch (err: any) {
         res.status(401).json({ error: err.message });
@@ -45,12 +56,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const logout = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    const token = req.headers.authorization!.split(' ')[1];
+    // Check for the token inside req.cookies instead of req.headers
+    const token = req.cookies?.access_token;
 
     try {
-        await authService.logout(token);
+        if (token) {
+            await authService.logout(token);
+        }
+        
+        // --- CLEAR COOKIE ---
+        // Telling the browser to delete the cookie so they stay logged out
+        res.clearCookie('access_token');
         res.status(200).json({ message: 'Logged out successfully' });
     } catch (err: any) {
+        res.clearCookie('access_token'); // Ensure cookie is cleared even if Supabase throws an error
         res.status(500).json({ error: err.message });
     }
 };

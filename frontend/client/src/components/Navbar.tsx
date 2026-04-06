@@ -22,18 +22,27 @@ export default function Navbar() {
     // If someone shares a link like /marketplace?q=flour, put "flour" in the search box
     const q = searchParams.get('q');
     if (q) setSearchQuery(q);
-
-    // Retrieve user session info from localStorage (saved during login)
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    // Fetch user from backend using the HTTP-only cookie
+    const fetchUser = async () => {
       try {
-        setUser(JSON.parse(storedUser));
+        const res = await fetch("http://localhost:5000/api/auth/me", {
+          method: "GET",
+          credentials: "include", // Uses the secure cookie
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
       } catch (err) {
-        console.error('Failed to parse user from local storage:', err);
+        console.error('Failed to fetch user:', err);
       }
-    }
+    };
+    
+    fetchUser();
   }, [searchParams]);
-
+  
   // 3. What happens when they click "Search" or press Enter
   const handleSearch = (e: FormEvent) => {
     e.preventDefault(); // Stop the page from reloading
