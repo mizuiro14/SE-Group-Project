@@ -1,4 +1,4 @@
-import { supabase } from '../SupabaseClient';
+import { supabase, supabaseAdmin } from '../SupabaseClient';
 
 export type User = {
     id?: number;
@@ -44,7 +44,8 @@ export const searchUserByEmail = async (userEmail: string): Promise<User | null>
 export const createUser = async (userData: User | User[]): Promise<User[]> => {
     const payload = Array.isArray(userData) ? userData : [userData];
 
-    const { data, error } = await supabase
+    // USE THE UNTOUCHED ADMIN CLIENT HERE
+    const { data, error } = await supabaseAdmin
         .from('users')
         .insert(payload)
         .select();
