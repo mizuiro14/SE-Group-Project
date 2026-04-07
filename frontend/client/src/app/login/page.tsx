@@ -53,9 +53,10 @@ export default function LoginPage() {
         {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
 
         <form onSubmit={handleLogin} className="w-full flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Email</label>
+                    <div className="flex flex-col gap-1">
+            <label htmlFor="emailInput" className="text-sm font-medium text-gray-700">Email</label>
             <input 
+              id="emailInput"
               type="email" 
               required
               placeholder="name@example.com" 
@@ -66,8 +67,9 @@ export default function LoginPage() {
           </div>
           
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Password</label>
+            <label htmlFor="passwordInput" className="text-sm font-medium text-gray-700">Password</label>
             <input 
+              id="passwordInput"
               type="password" 
               required
               placeholder="••••••••" 
