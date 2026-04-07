@@ -19,12 +19,31 @@ describe('User Integration Tests', () => {
 
     // Clean up test data after all tests
     afterAll(async () => {
-        if (createdUserId) {
-            try {
-                await supabase.from('users').delete().eq('id', createdUserId);
-            } catch (err) {
-                console.error('Cleanup error:', err);
+        try {
+            const patterns = [
+                `testuser-%`,
+                `search_%`,
+                `apitest_%`,
+                `bulk%`,
+            ];
+
+            for (const pattern of patterns) {
+                const { error } = await supabase
+                    .from('users')
+                    .delete()
+                    .ilike('user_email', pattern);
+
+                if (error) {
+                    console.error('Cleanup error for pattern', pattern, error);
+                }
             }
+
+            if (createdUserId) {
+                const { error } = await supabase.from('users').delete().eq('id', createdUserId);
+                if (error) console.error('Cleanup error deleting by id:', error);
+            }
+        } catch (err) {
+            console.error('Unexpected cleanup error:', err);
         }
     });
 
@@ -63,7 +82,7 @@ describe('User Integration Tests', () => {
             expect(Array.isArray(users)).toBe(true);
             expect(users.length).toBeGreaterThan(0);
             expect(users[0]).toHaveProperty('username');
-            expect(users[0]).toHaveProperty('email');
+            expect(users[0]).toHaveProperty('user_email');
         });
     });
 
