@@ -1,83 +1,199 @@
-// 1. Define the Item type to make the strategies strongly typed
-type BarleyItem = {
-  id: number;
-  name: string;
-  price: string;
-  user: string;
-};
+'use client';
 
-const BARLEY_ITEMS: BarleyItem[] = [
-  { id: 1, name: "Pearl Barley", price: "$4.99/lb", user: "From: user5323535" },
-  { id: 2, name: "Hulled Barley", price: "$5.49/lb", user: "From: user6434646" },
-  { id: 3, name: "Barley Flakes", price: "$6.99/lb", user: "From: user7545757" },
-  { id: 4, name: "Barley Flour", price: "$7.25/lb", user: "From: user8656868" },
-  { id: 5, name: "Barley Grits", price: "$5.99/lb", user: "From: user9767976" },
-  { id: 6, name: "Black Barley", price: "$8.50/lb", user: "From: user10871087" },
-];
+import React from 'react';
+import Sidebar from '@/components/Sidebar';
+import { 
+  Search, Bell, ShoppingCart, ChevronDown, Filter, 
+  Bookmark, RotateCcw, Plus, MoreHorizontal, Truck
+} from 'lucide-react';
 
-// 2. Define the Strategy Type
-type FilterStrategy = (items: BarleyItem[], query: string) => BarleyItem[];
-
-// 3. Create a registry of specific strategies
-const filterStrategies: Record<string, FilterStrategy> = {
-  // Strategy for text search (your original logic)
-  textSearch: (items, query) => 
-    items.filter(
-      (item) => 
-        item.name.toLowerCase().includes(query) || 
-        item.user.toLowerCase().includes(query)
-    ),
-  // Example of another strategy you could easily add later
-  exactNameMatch: (items, query) => 
-    items.filter((item) => item.name.toLowerCase() === query),
-  // Strategy for when there is no search query
-  noFilter: (items) => items,
-};
-
-export default async function MarketplacePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
-  const resolvedSearchParams = await searchParams;
-  const query = resolvedSearchParams.q?.toLowerCase() || '';
-  
-  // 4. Determine which strategy to use
-  // We use the 'textSearch' strategy if the user typed something, otherwise 'noFilter'
-  const activeStrategy = query ? filterStrategies.textSearch : filterStrategies.noFilter;
-  
-  // 5. Execute the selected strategy
-  const filteredItems = activeStrategy(BARLEY_ITEMS, query);
-
+export default function MarketplacePage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Barley Marketplace</h1>
-        
-        {query && (
-          <p className="mb-6 text-gray-600">
-            Showing results for <span className="font-semibold">"{query}"</span>
-          </p>
-        )}
+    <div className="flex h-screen bg-[#F5F3EF] text-stone-800 font-sans">
+      
+      <Sidebar />
 
-        {filteredItems.length === 0 ? (
-          <p className="text-gray-500">No items found matching your search.</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredItems.map((item) => (
-               <div key={item.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                 <h2 className="text-xl font-semibold text-gray-900 mb-2">{item.name}</h2>
-                 <p className="text-gray-600 mb-4 h-16 line-clamp-2">{item.user}</p>
-                 <div className="flex items-center justify-between mt-auto">
-                   <span className="font-bold text-lg text-gray-900">{item.price}</span>
-                   <button className="px-4 py-2 text-sm font-semibold text-white bg-brand-secondary rounded hover:bg-brand-tertiary transition-colors">
-                     Add to Cart
-                   </button>
-                 </div>
-               </div>
-            ))}
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        
+        {/* TOP NAVBAR */}
+        <header className="h-16 bg-white border-b border-[#EAE7E0] flex items-center justify-between px-6 shrink-0 shadow-sm">
+          <div className="flex-1 max-w-2xl relative">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" 
+              placeholder="Search marketplace products..." 
+              className="w-full bg-[#F5F3EF] border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#2C3E2D] outline-none text-stone-800 placeholder-stone-400"
+            />
           </div>
-        )}
+          <div className="flex items-center gap-4 ml-4">
+            <button className="relative p-2 text-stone-400 hover:text-stone-800 transition-colors">
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1 right-2 w-2 h-2 bg-[#C85D4E] border border-white rounded-full"></span>
+            </button>
+            <button className="relative p-2 bg-[#F5F3EF] rounded-full text-stone-600 hover:bg-[#EAE7E0] transition-colors">
+              <ShoppingCart className="w-5 h-5" />
+              <span className="absolute -top-1 -right-1 bg-[#2C3E2D] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                3
+              </span>
+            </button>
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <div className="flex-1 overflow-auto p-8">
+          
+          {/* Top Banner Card */}
+          <div className="bg-white rounded-2xl p-4 mb-8 flex items-center justify-between shadow-sm border border-[#EAE7E0]">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-[#E5F0E6] rounded-full flex items-center justify-center">
+                <Truck className="w-5 h-5 text-[#2C3E2D]" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-stone-900">Next Delivery Arriving</h3>
+                <p className="text-sm text-stone-500">Today between 2:00 PM - 4:00 PM</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="px-4 py-2 border border-[#EAE7E0] rounded-lg text-sm font-medium text-stone-700 bg-white hover:bg-[#F5F3EF] shadow-sm flex items-center gap-2">
+                <Bookmark className="w-4 h-4" />
+                Saved
+              </button>
+              <button className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#2C3E2D] hover:bg-[#1E2D20] shadow-sm flex items-center gap-2 transition-colors">
+                <RotateCcw className="w-4 h-4" />
+                Reorder
+              </button>
+            </div>
+          </div>
+
+          {/* Marketplace Header */}
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-stone-900 mb-2">Member Marketplace</h1>
+              <p className="text-sm text-stone-600 font-medium">Exclusive deals and fresh arrivals for you.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="px-4 py-1.5 bg-[#2C3E2D] text-white rounded-full text-sm font-medium shadow-sm">All</button>
+              <button className="px-4 py-1.5 bg-white text-stone-700 rounded-full text-sm font-medium hover:bg-[#F5F3EF] shadow-sm border border-[#EAE7E0]">Organic</button>
+              <button className="px-4 py-1.5 bg-white text-stone-700 rounded-full text-sm font-medium hover:bg-[#F5F3EF] shadow-sm border border-[#EAE7E0]">Pantry</button>
+              <button className="px-4 py-1.5 bg-white text-stone-700 rounded-full text-sm font-medium hover:bg-[#F5F3EF] shadow-sm border border-[#EAE7E0]">Snacks</button>
+              <button className="ml-2 px-4 py-1.5 bg-white text-stone-900 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-[#F5F3EF] border border-[#EAE7E0]">
+                <Filter className="w-4 h-4" />
+                Filter
+              </button>
+            </div>
+          </div>
+
+          {/* Recommended Cards */}
+          <h2 className="text-lg font-bold text-stone-900 mb-4">Recommended for You</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            {/* Card 1 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm relative group cursor-pointer border border-[#EAE7E0] hover:border-[#2C3E2D]/30 transition-all hover:shadow-md">
+              <span className="absolute top-4 left-4 bg-[#C85D4E] text-white text-[10px] font-bold px-2 py-1 rounded">SALE</span>
+              <div className="h-40 flex items-center justify-center mb-4 bg-[#F5F3EF] rounded-xl">
+                <img src="https://via.placeholder.com/80x200?text=Oil" alt="Olive Oil" className="h-full object-contain mix-blend-multiply" />
+              </div>
+              <p className="text-xs text-[#2C3E2D] font-bold mb-1 uppercase tracking-wide">Pantry Essentials</p>
+              <h3 className="font-bold text-stone-900 text-sm mb-3">Artisan Organic Olive Oil</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-bold text-stone-900">$24.00</span>
+                  <span className="text-xs text-stone-400 line-through">$30.00</span>
+                </div>
+                <button className="w-8 h-8 rounded-full bg-[#F5F3EF] flex items-center justify-center text-stone-600 hover:bg-[#2C3E2D] hover:text-white transition-colors">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Card 2 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm relative group cursor-pointer border border-[#EAE7E0] hover:border-[#2C3E2D]/30 transition-all hover:shadow-md">
+              <div className="h-40 flex items-center justify-center mb-4 bg-[#F5F3EF] rounded-xl">
+                <img src="https://via.placeholder.com/150x100?text=Bread" alt="Sourdough Loaf" className="h-full object-contain mix-blend-multiply" />
+              </div>
+              <p className="text-xs text-[#2C3E2D] font-bold mb-1 uppercase tracking-wide">Fresh Bakery</p>
+              <h3 className="font-bold text-stone-900 text-sm mb-3">Rustic Sourdough Loaf</h3>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-stone-900">$8.50</span>
+                <button className="w-8 h-8 rounded-full bg-[#F5F3EF] flex items-center justify-center text-stone-600 hover:bg-[#2C3E2D] hover:text-white transition-colors">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* All Products List */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden p-6 border border-[#EAE7E0]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-stone-900">All Products</h2>
+              <button className="text-sm text-stone-500 font-medium flex items-center gap-1">
+                Sort by: <span className="font-bold text-stone-900">Relevance</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="text-xs text-stone-400 uppercase tracking-wider border-b border-[#EAE7E0]">
+                  <th className="pb-3 w-8"><input type="checkbox" className="rounded text-[#2C3E2D] focus:ring-[#2C3E2D] border-stone-300" /></th>
+                  <th className="pb-3 font-semibold text-stone-600">Product Name</th>
+                  <th className="pb-3 font-semibold text-stone-600">Category</th>
+                  <th className="pb-3 font-semibold text-stone-600">Stock Status</th>
+                  <th className="pb-3 font-semibold text-stone-600">Member Price</th>
+                  <th className="pb-3 font-semibold text-stone-600">Availability</th>
+                  <th className="pb-3 font-semibold text-right text-stone-600">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#EAE7E0]">
+                {/* Row 1 */}
+                <tr className="group hover:bg-[#F5F3EF] transition-colors">
+                  <td className="py-4"><input type="checkbox" className="rounded text-[#2C3E2D] border-stone-300" /></td>
+                  <td className="py-4 flex items-center gap-3">
+                    <div className="w-10 h-10 border border-[#EAE7E0] rounded bg-white flex items-center justify-center">
+                       <img src="https://via.placeholder.com/20?text=H" alt="Honey" />
+                    </div>
+                    <span className="font-bold text-stone-900">Raw Wildflower Honey</span>
+                  </td>
+                  <td className="py-4 text-stone-500 font-medium">Pantry</td>
+                  <td className="py-4 text-stone-500 font-medium">45 in stock</td>
+                  <td className="py-4 font-bold text-stone-900">$14.00</td>
+                  <td className="py-4">
+                    <span className="bg-[#E5F0E6] text-[#2C3E2D] text-xs font-bold px-3 py-1 rounded-full">In Stock</span>
+                  </td>
+                  <td className="py-4">
+                    <div className="flex items-center justify-end gap-2 text-stone-400">
+                      <button className="p-1 hover:text-stone-900 transition-colors"><ShoppingCart className="w-4 h-4" /></button>
+                      <button className="p-1 hover:text-stone-900 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+                {/* Row 2 */}
+                <tr className="group hover:bg-[#F5F3EF] transition-colors">
+                  <td className="py-4"><input type="checkbox" className="rounded text-[#2C3E2D] border-stone-300" /></td>
+                  <td className="py-4 flex items-center gap-3">
+                    <div className="w-10 h-10 border border-[#EAE7E0] rounded bg-white flex items-center justify-center">
+                       <img src="https://via.placeholder.com/20?text=C" alt="Coffee" />
+                    </div>
+                    <span className="font-bold text-stone-900">Dark Roast Coffee Beans</span>
+                  </td>
+                  <td className="py-4 text-stone-500 font-medium">Beverages</td>
+                  <td className="py-4 text-[#C85D4E] font-bold">5 Low Stock</td>
+                  <td className="py-4 font-bold text-stone-900">$18.50</td>
+                  <td className="py-4">
+                    <span className="bg-[#E5F0E6] text-[#2C3E2D] text-xs font-bold px-3 py-1 rounded-full">In Stock</span>
+                  </td>
+                  <td className="py-4">
+                    <div className="flex items-center justify-end gap-2 text-stone-400">
+                      <button className="p-1 hover:text-stone-900 transition-colors"><ShoppingCart className="w-4 h-4" /></button>
+                      <button className="p-1 hover:text-stone-900 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
       </main>
     </div>
   );

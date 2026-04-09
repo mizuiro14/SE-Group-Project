@@ -48,9 +48,37 @@ export const searchUser = async (req: Request, res: Response) => {
     }
 };
 
+
+// ======== ADD THIS NEW FUNCTION ========
+export const updateUserProfile = async (req: Request, res: Response) => {
+    try {
+        const { first_name, last_name, email, contact } = req.body;
+        
+        // req.user logic is populated by authenticate middleware
+        const userId = (req as any).user?.id;
+        
+        if (!userId) {
+             res.status(401).json({ error: "Unauthorized" });
+             return;
+        }
+
+        const updatedUser = await userService.updateSupabaseUser(userId, {
+             email,
+             first_name,
+             last_name,
+             contact
+        });
+
+        res.status(200).json({ message: "Profile updated successfully", user: updatedUser });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // ! TEMPORARY
 export default {
     getUsers,
     createUser,
     searchUser,
+    updateUserProfile // <-- Add it to the export
 };

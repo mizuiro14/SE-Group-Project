@@ -10,6 +10,7 @@ export default function Navbar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMarketplace = pathname === '/marketplace';
+  const isProfile = pathname === '/profile';
 
   // 1. Keep track of what the user types in the search box
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +56,9 @@ export default function Navbar() {
       router.push('/marketplace');
     }
   };
+
+  // ✅ RIGHT HERE: Placed the early return AFTER all hooks!
+  if (isMarketplace || isProfile) return null; 
 
   return (
     <nav className="sticky top-0 w-full z-50 bg-(--foreground) opacity-100 border-b border-brand-secondary/20 shadow-sm">
