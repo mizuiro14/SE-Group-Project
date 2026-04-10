@@ -1,13 +1,117 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { 
   Search, Bell, ShoppingCart, ChevronDown, Filter, 
-  Bookmark, RotateCcw, Plus, MoreHorizontal, Truck
+  Bookmark, RotateCcw, Plus, MoreHorizontal, Truck, Check
 } from 'lucide-react';
 
+// ==========================================
+// 1. TYPES & MOCK DATA
+// ==========================================
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+  stockText: string;
+  price: number;
+  status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+  imageLetter: string;
+}
+
+const MOCK_PRODUCTS: Product[] = [
+  { id: '1', name: 'Daily Essential Vitamins', category: 'Vitamins', stockText: '120 in stock', price: 24.50, status: 'In Stock', imageLetter: 'V' },
+  { id: '2', name: 'Green Superfood Juice', category: 'Juice', stockText: '45 in stock', price: 12.00, status: 'In Stock', imageLetter: 'J' },
+  { id: '3', name: 'Organic Barley Powder', category: 'Powder', stockText: '5 Low Stock', price: 34.00, status: 'Low Stock', imageLetter: 'P' },
+  { id: '4', name: 'Barley Grass Capsules', category: 'Pills', stockText: '82 in stock', price: 18.00, status: 'In Stock', imageLetter: 'P' },
+  { id: '5', name: 'Kids Barley Gummies', category: 'Gummy', stockText: '0 in stock', price: 15.50, status: 'Out of Stock', imageLetter: 'G' },
+];
+
+const CATEGORIES = ['Vitamins', 'Juice', 'Powder', 'Pills', 'Gummy'];
+
+// ==========================================
+// 2. FILTERING LOGIC (DECORATOR PATTERN)
+// ==========================================
+interface ProductFilter {
+  filter(products: Product[]): Product[];
+}
+
+// Base Component: Returns all products
+class BaseFilter implements ProductFilter {
+  filter(products: Product[]): Product[] {
+    return products;
+  }
+}
+
+// Abstract Decorator
+abstract class FilterDecorator implements ProductFilter {
+  protected filterComponent: ProductFilter;
+  
+  constructor(filterComponent: ProductFilter) {
+    this.filterComponent = filterComponent;
+  }
+  
+  abstract filter(products: Product[]): Product[];
+}
+
+// Concrete Decorator: Filters by matching ANY of the selected categories
+class CategoryFilter extends FilterDecorator {
+  private selectedCategories: string[];
+  
+  constructor(filterComponent: ProductFilter, selectedCategories: string[]) {
+    super(filterComponent);
+    this.selectedCategories = selectedCategories;
+  }
+  
+  filter(products: Product[]): Product[] {
+    const previousFiltered = this.filterComponent.filter(products);
+    // If no categories are selected, return all
+    if (this.selectedCategories.length === 0) return previousFiltered;
+    // Otherwise, check if the product's category is in the selected list
+    return previousFiltered.filter(p => this.selectedCategories.includes(p.category));
+  }
+}
+
+// ==========================================
+// 3. MAIN COMPONENT
+// ==========================================
 export default function MarketplacePage() {
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Close custom dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  // Apply the decorator pattern filtering
+  const filteredProducts = useMemo(() => {
+    let productFilter: ProductFilter = new BaseFilter();
+    
+    // Dynamically wrap with CategoryFilter if there are active selections
+    if (selectedCategories.length > 0) {
+      productFilter = new CategoryFilter(productFilter, selectedCategories);
+    }
+    
+    return productFilter.filter(MOCK_PRODUCTS);
+  }, [selectedCategories]);
+
   return (
     <div className="flex h-screen bg-[#F5F3EF] text-stone-800 font-sans">
       
@@ -77,10 +181,41 @@ export default function MarketplacePage() {
               <button className="px-4 py-1.5 bg-white text-stone-700 rounded-full text-sm font-medium hover:bg-[#F5F3EF] shadow-sm border border-[#EAE7E0]">Organic</button>
               <button className="px-4 py-1.5 bg-white text-stone-700 rounded-full text-sm font-medium hover:bg-[#F5F3EF] shadow-sm border border-[#EAE7E0]">Pantry</button>
               <button className="px-4 py-1.5 bg-white text-stone-700 rounded-full text-sm font-medium hover:bg-[#F5F3EF] shadow-sm border border-[#EAE7E0]">Snacks</button>
-              <button className="ml-2 px-4 py-1.5 bg-white text-stone-900 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-[#F5F3EF] border border-[#EAE7E0]">
-                <Filter className="w-4 h-4" />
-                Filter
-              </button>
+              
+              {/* Custom Multi-Select Dropdown Component */}
+              <div className="relative ml-2" ref={filterRef}>
+                <button 
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm border transition-colors ${
+                    selectedCategories.length > 0 
+                    ? 'bg-[#E5F0E6] border-[#2C3E2D] text-[#2C3E2D]' 
+                    : 'bg-white text-stone-900 border-[#EAE7E0] hover:bg-[#F5F3EF]'
+                  }`}
+                >
+                  <Filter className="w-4 h-4" />
+                  Filter {selectedCategories.length > 0 && `(${selectedCategories.length})`}
+                </button>
+
+                {isFilterOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-[#EAE7E0] rounded-xl shadow-lg z-10 py-2">
+                    {CATEGORIES.map(category => {
+                      const isSelected = selectedCategories.includes(category);
+                      return (
+                        <div 
+                          key={category}
+                          onClick={() => toggleCategory(category)}
+                          className="flex items-center px-4 py-2 cursor-pointer hover:bg-[#F5F3EF] transition-colors"
+                        >
+                          <div className={`w-4 h-4 mr-3 border rounded flex items-center justify-center ${isSelected ? 'bg-[#2C3E2D] border-[#2C3E2D]' : 'bg-white border-stone-300'}`}>
+                            {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                          </div>
+                          <span className="text-sm font-medium text-stone-700">{category}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -145,50 +280,45 @@ export default function MarketplacePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAE7E0]">
-                {/* Row 1 */}
-                <tr className="group hover:bg-[#F5F3EF] transition-colors">
-                  <td className="py-4"><input type="checkbox" className="rounded text-[#2C3E2D] border-stone-300" /></td>
-                  <td className="py-4 flex items-center gap-3">
-                    <div className="w-10 h-10 border border-[#EAE7E0] rounded bg-white flex items-center justify-center">
-                       <img src="https://via.placeholder.com/20?text=H" alt="Honey" />
-                    </div>
-                    <span className="font-bold text-stone-900">Raw Wildflower Honey</span>
-                  </td>
-                  <td className="py-4 text-stone-500 font-medium">Pantry</td>
-                  <td className="py-4 text-stone-500 font-medium">45 in stock</td>
-                  <td className="py-4 font-bold text-stone-900">$14.00</td>
-                  <td className="py-4">
-                    <span className="bg-[#E5F0E6] text-[#2C3E2D] text-xs font-bold px-3 py-1 rounded-full">In Stock</span>
-                  </td>
-                  <td className="py-4">
-                    <div className="flex items-center justify-end gap-2 text-stone-400">
-                      <button className="p-1 hover:text-stone-900 transition-colors"><ShoppingCart className="w-4 h-4" /></button>
-                      <button className="p-1 hover:text-stone-900 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-                {/* Row 2 */}
-                <tr className="group hover:bg-[#F5F3EF] transition-colors">
-                  <td className="py-4"><input type="checkbox" className="rounded text-[#2C3E2D] border-stone-300" /></td>
-                  <td className="py-4 flex items-center gap-3">
-                    <div className="w-10 h-10 border border-[#EAE7E0] rounded bg-white flex items-center justify-center">
-                       <img src="https://via.placeholder.com/20?text=C" alt="Coffee" />
-                    </div>
-                    <span className="font-bold text-stone-900">Dark Roast Coffee Beans</span>
-                  </td>
-                  <td className="py-4 text-stone-500 font-medium">Beverages</td>
-                  <td className="py-4 text-[#C85D4E] font-bold">5 Low Stock</td>
-                  <td className="py-4 font-bold text-stone-900">$18.50</td>
-                  <td className="py-4">
-                    <span className="bg-[#E5F0E6] text-[#2C3E2D] text-xs font-bold px-3 py-1 rounded-full">In Stock</span>
-                  </td>
-                  <td className="py-4">
-                    <div className="flex items-center justify-end gap-2 text-stone-400">
-                      <button className="p-1 hover:text-stone-900 transition-colors"><ShoppingCart className="w-4 h-4" /></button>
-                      <button className="p-1 hover:text-stone-900 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-stone-500">
+                      No products match the selected filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProducts.map((product) => (
+                    <tr key={product.id} className="group hover:bg-[#F5F3EF] transition-colors">
+                      <td className="py-4"><input type="checkbox" className="rounded text-[#2C3E2D] border-stone-300" /></td>
+                      <td className="py-4 flex items-center gap-3">
+                        <div className="w-10 h-10 border border-[#EAE7E0] rounded bg-white flex items-center justify-center font-bold text-stone-400">
+                           {product.imageLetter}
+                        </div>
+                        <span className="font-bold text-stone-900">{product.name}</span>
+                      </td>
+                      <td className="py-4 text-stone-500 font-medium">{product.category}</td>
+                      <td className={`py-4 font-bold ${product.status === 'Low Stock' ? 'text-[#C85D4E]' : 'text-stone-500 font-medium'}`}>
+                        {product.stockText}
+                      </td>
+                      <td className="py-4 font-bold text-stone-900">${product.price.toFixed(2)}</td>
+                      <td className="py-4">
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                          product.status === 'In Stock' ? 'bg-[#E5F0E6] text-[#2C3E2D]' : 
+                          product.status === 'Low Stock' ? 'bg-orange-100 text-orange-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {product.status}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        <div className="flex items-center justify-end gap-2 text-stone-400">
+                          <button className="p-1 hover:text-stone-900 transition-colors"><ShoppingCart className="w-4 h-4" /></button>
+                          <button className="p-1 hover:text-stone-900 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

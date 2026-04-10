@@ -62,7 +62,7 @@ export default function LoginPage() {
               placeholder="name@example.com" 
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
             />
           </div>
           
@@ -75,7 +75,7 @@ export default function LoginPage() {
               placeholder="••••••••" 
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
             />
           </div>
 

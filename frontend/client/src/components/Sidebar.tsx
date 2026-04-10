@@ -73,10 +73,10 @@ export default function Sidebar() {
                 </a>
               </li>
               <li>
-                <a href="#" className={inactiveClass}>
-                  <Package className="w-5 h-5 text-stone-500" />
+                <Link href="/stock" className={isActive('/stock') ? activeClass : inactiveClass}>
+                  <Package className={`w-5 h-5 ${isActive('/stock') ? 'text-[#2C3E2D]' : 'text-stone-500'}`} />
                   Stock Page
-                </a>
+                </Link>
               </li>
               <li>
                 <a href="#" className={inactiveClass}>
@@ -97,7 +97,6 @@ export default function Sidebar() {
                 </a>
               </li>
               <li>
-                {/* <-- Change to a Link pointing to /profile --> */}
                 <Link href="/profile" className={isActive('/profile') ? activeClass : inactiveClass}>
                   <User className={`w-5 h-5 ${isActive('/profile') ? 'text-[#2C3E2D]' : 'text-stone-500'}`} />
                   Profile
@@ -108,22 +107,28 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* User Profile */}
+      {/* User Dropdown / Bottom Section */}
       <div className="p-4 border-t border-[#EAE7E0]">
-        <Link href="/profile" className="flex items-center gap-3 hover:bg-[#F5F3EF] p-2 rounded-lg cursor-pointer transition-colors block">
-          <div className="w-10 h-10 rounded-full bg-[#F5F3EF] overflow-hidden shrink-0 border border-[#EAE7E0]">
-            <img src="/assets/avif-test-image.avif" alt="User Avatar" className="w-full h-full object-cover" />
+        <button className="flex items-center justify-between w-full p-2 hover:bg-[#F5F3EF] rounded-lg transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center overflow-hidden">
+              {user?.avatarUrl ? (
+                <Image src={user.avatarUrl} alt="User avatar" width={32} height={32} />
+              ) : (
+                <User className="w-5 h-5 text-stone-500" />
+              )}
+            </div>
+            <div className="text-left flex flex-col items-start leading-tight">
+              <span className="text-sm font-semibold text-stone-900 line-clamp-1">
+                {user ? user.first_name || user.email : "Loading..."}
+              </span>
+              <span className="text-xs text-stone-500 line-clamp-1">
+                {user?.role || "Member"}
+              </span>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <h4 className="text-sm font-semibold text-stone-900 truncate">
-              {user ? (user.user_metadata?.username || user.username || user.email || 'User') : 'Guest Profile'}
-            </h4>
-            <p className="text-xs text-stone-500 truncate">
-              {user ? 'Premium Member' : 'Please log in'}
-            </p>
-          </div>
-          <ChevronDown className="w-4 h-4 text-stone-400 shrink-0" />
-        </Link>
+          <ChevronDown className="w-4 h-4 text-stone-400" />
+        </button>
       </div>
     </aside>
   );
