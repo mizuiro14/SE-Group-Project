@@ -11,7 +11,8 @@ export default function Navbar() {
   const isDashboardPage = 
     pathname === '/marketplace' || 
     pathname === '/profile' || 
-    pathname === '/stock';
+    pathname === '/stock' ||
+    pathname === '/delivery';
 
   // Hide this global public navbar entirely on dashboard pages 
   // (because they have their own custom header and Sidebar built into the page)

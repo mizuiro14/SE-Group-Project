@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // Google Fonts built-in
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import { ThemeProvider } from "@/theme/ThemeContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,13 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Navbar />
-        {children}
-        
-        {/* Simple Footer directly in layout */}
-        <footer className="border-t border-gray-100 py-12 text-center text-gray-500 text-sm">
-          <p>© {new Date().getFullYear()} BrandName Inc. All rights reserved.</p>
-        </footer>
+        <ThemeProvider>
+          <Navbar />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

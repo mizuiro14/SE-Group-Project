@@ -3,20 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
   
-  // Added role (buyer/seller) to state
   const [formData, setFormData] = useState({ 
     username: "", 
     email: "", 
     password: "", 
     contact: "", 
-    role: "buyer", // default to buyer
+    role: "buyer", 
     branch: "" 
   });
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +32,6 @@ export default function SignupPage() {
     }
 
     try {
-      // NOTE: Replace the URL with your actual backend URL
       const res = await fetch("http://localhost:5000/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -48,8 +48,8 @@ export default function SignupPage() {
 
       if (!res.ok) throw new Error(data.error || "Failed to sign up");
 
-      alert("Signup successful! Please log in.");
-      router.push("/login");
+      // Show success modal instead of native alert
+      setSuccess(true);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -57,12 +57,78 @@ export default function SignupPage() {
     }
   };
 
+  const handleSuccessClose = () => {
+    setSuccess(false);
+    router.push("/login");
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-900">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8 border border-gray-100 mt-10 mb-10">
+      
+      {/* Error Modal Overlay */}
+      {error && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-red-50/50">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="text-red-500 w-5 h-5" />
+                <h3 className="font-bold text-red-900">Signup Failed</h3>
+              </div>
+              <button 
+                onClick={() => setError("")} 
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-gray-600 text-sm">{error}</p>
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={() => setError("")}
+                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal Overlay */}
+      {success && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-green-50/50">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="text-green-500 w-5 h-5" />
+                <h3 className="font-bold text-green-900">Account Created</h3>
+              </div>
+              <button 
+                onClick={handleSuccessClose} 
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-gray-600 text-sm">Signup successful! You can now log in to your account.</p>
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={handleSuccessClose}
+                className="px-4 py-2 bg-brand-primary text-white text-sm font-medium rounded-lg hover:bg-brand-secondary transition-colors shadow-sm focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
+              >
+                Proceed to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8 border border-gray-100 my-10">
         <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">Create Account</h1>
-        
-        {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
         
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
           
