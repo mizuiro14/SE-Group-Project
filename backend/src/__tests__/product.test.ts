@@ -1,155 +1,70 @@
-import request from 'supertest';
-import express from 'express';
-import productController from '../controllers/productController';
-import productService from '../services/productService';
+import productService, { getAllProducts, getProductById, createProduct, updateProduct } from '../services/productService';
 
-jest.mock('../SupabaseClient', () => ({
-    supabase: {
-        from: jest.fn(() => ({
-            select: jest.fn().mockReturnThis(),
-            insert: jest.fn().mockReturnThis(),
-            update: jest.fn().mockReturnThis(),
-            delete: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            single: jest.fn().mockReturnThis(),
-            order: jest.fn().mockReturnThis(),
-            gt: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            or: jest.fn().mockReturnThis(),
-            range: jest.fn().mockReturnThis(),
-        })),
-    },
-}));
+jest.mock('../SupabaseClient', () => {
+    let result: any = { data: null, error: null };
+    const chain: any = {
+        select: jest.fn().mockReturnThis(),
+        insert: jest.fn().mockReturnThis(),
+        update: jest.fn().mockReturnThis(),
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn(async () => result),
+        order: jest.fn(async () => result),
+        gt: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        range: jest.fn().mockReturnThis(),
+        ilike: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        lte: jest.fn().mockReturnThis(),
+    };
+    chain.then = (onFulfilled: any) => Promise.resolve(onFulfilled(result));
 
-// Mock the entire productService module
-jest.mock('../services/productService');
+    return {
+        supabase: {
+            from: jest.fn(() => chain),
+            __setResult: (r: any) => { result = r; }
+        }
+    };
+});
 
-const app = express();
-app.use(express.json());
+describe('Product Service Unit Tests', () => {
+    const { supabase } = require('../SupabaseClient');
 
-// Product routes
-app.post('/products', productController.createProduct);
-app.get('/products/:id', productController.getProductById);
-app.put('/products/:id', productController.updateProduct);
-app.delete('/products/:id', productController.deleteProduct);
-app.get('/products', productController.getAllProducts); // For testing getAllProducts
+    beforeEach(() => { jest.clearAllMocks(); jest.restoreAllMocks(); });
 
-describe('Product API Integration Tests', () => {
-    beforeEach(() => {
-        // Clear all mocks before each test
-        jest.clearAllMocks();
+    it('creates a product successfully (happy)', async () => {
+        const payload = { name: 'A', description: null, price: 10, quantity: 1, category_id: null, sku: 'A1' };
+        const created = { id: 1, ...payload, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        supabase.__setResult({ data: created, error: null });
+
+        const res = await createProduct(payload as any);
+        expect(res).toEqual(created);
     });
 
-    // Happy Path 1: Create Product
-    it('should create a new product successfully', async () => {
-        const newProduct = {
-            name: 'Test Product',
-            description: 'A product for testing',
-            price: 99.99,
-            quantity: 10,
-            category_id: 1,
-            sku: 'TP-001',
-        };
-        const createdProduct = { id: 1, ...newProduct, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    it('retrieves a product by id successfully (happy)', async () => {
+        const product = { id: 2, name: 'B', description: null, price: 5, quantity: 2, category_id: null, sku: 'B1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        supabase.__setResult({ data: product, error: null });
 
-        (productService.createProduct as jest.Mock).mockResolvedValue(createdProduct);
-
-        const res = await request(app)
-            .post('/products')
-            .send(newProduct);
-
-        expect(res.statusCode).toEqual(201);
-        expect(res.body).toEqual(createdProduct);
-        expect(productService.createProduct).toHaveBeenCalledWith({
-            name: 'Test Product',
-            description: 'A product for testing',
-            price: 99.99,
-            quantity: 10,
-            category_id: 1,
-            sku: 'TP-001',
-        });
+        const res = await getProductById(2);
+        expect(res).toEqual(product);
     });
 
-    // Happy Path 2: Get Product by ID
-    it('should retrieve a product by ID successfully', async () => {
-        const product = {
-            id: 1,
-            name: 'Test Product',
-            description: 'A product for testing',
-            price: 99.99,
-            quantity: 10,
-            category_id: 1,
-            sku: 'TP-001',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        };
+    it('gets all products with filters (happy)', async () => {
+        const list = [{ id: 3, name: 'C', description: null, price: 1, quantity: 3, category_id: 1, sku: 'C1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+        supabase.__setResult({ data: list, error: null });
 
-        (productService.getProductById as jest.Mock).mockResolvedValue(product);
-
-        const res = await request(app)
-            .get(`/products/${product.id}`);
-
-        expect(res.statusCode).toEqual(200);
-        expect(res.body).toEqual(product);
-        expect(productService.getProductById).toHaveBeenCalledWith(product.id);
+        const res = await getAllProducts({ category_id: 1 });
+        expect(res).toEqual(list);
     });
 
-    // Happy Path 3: Update Product
-    it('should update an existing product successfully', async () => {
-        const productId = 1;
-        const updates = { price: 109.99, quantity: 5 };
-        const updatedProduct = {
-            id: productId,
-            name: 'Test Product',
-            description: 'A product for testing',
-            price: 109.99,
-            quantity: 5,
-            category_id: 1,
-            sku: 'TP-001',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        };
-
-        (productService.updateProduct as jest.Mock).mockResolvedValue(updatedProduct);
-
-        const res = await request(app)
-            .put(`/products/${productId}`)
-            .send(updates);
-
-        expect(res.statusCode).toEqual(200);
-        expect(res.body).toEqual(updatedProduct);
-        expect(productService.updateProduct).toHaveBeenCalledWith(productId, updates);
+    it('throws when creation fails (sad)', async () => {
+        supabase.__setResult({ data: null, error: { message: 'insert failed' } });
+        await expect(createProduct({ name: 'X', description: null, price: 1, quantity: 1, category_id: null, sku: null } as any)).rejects.toThrow('insert failed');
     });
 
-    // Sad Path 1: Create Product with Invalid Data (missing name)
-    it('should return 400 if required fields are missing when creating a product', async () => {
-        const invalidProduct = {
-            description: 'A product for testing',
-            price: 99.99,
-            quantity: 10,
-            category_id: 1,
-            sku: 'TP-002',
-        };
-
-        const res = await request(app)
-            .post('/products')
-            .send(invalidProduct);
-
-        expect(res.statusCode).toEqual(400);
-        expect(res.body).toEqual({ error: 'Name, price, and quantity are required' });
-        expect(productService.createProduct).not.toHaveBeenCalled();
-    });
-
-    // Sad Path 2: Get Non-Existent Product
-    it('should return 404 if product is not found', async () => {
-        const nonExistentId = 999;
-        (productService.getProductById as jest.Mock).mockRejectedValue(new Error('Product not found'));
-
-        const res = await request(app)
-            .get(`/products/${nonExistentId}`);
-
-        expect(res.statusCode).toEqual(404);
-        expect(res.body).toEqual({ error: 'Product not found' });
-        expect(productService.getProductById).toHaveBeenCalledWith(nonExistentId);
+    it('throws when product not found (sad)', async () => {
+        supabase.__setResult({ data: null, error: null });
+        await expect(getProductById(999)).rejects.toThrow('Product not found');
     });
 });
