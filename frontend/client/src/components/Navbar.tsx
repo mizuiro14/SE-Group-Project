@@ -12,7 +12,9 @@ export default function Navbar() {
     pathname === '/marketplace' || 
     pathname === '/profile' || 
     pathname === '/stock' ||
-    pathname === '/delivery';
+    pathname === '/delivery' ||
+    pathname === '/bestsellers' ||
+    pathname === '/members';
 
   // Hide this global public navbar entirely on dashboard pages 
   // (because they have their own custom header and Sidebar built into the page)
