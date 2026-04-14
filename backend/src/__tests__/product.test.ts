@@ -58,6 +58,20 @@ describe('Product Service Unit Tests', () => {
         expect(res).toEqual(list);
     });
 
+    it('gets all products with no filters (happy)', async () => {
+        const list = [{ id: 4, name: 'D', description: null, price: 2, quantity: 4, category_id: 2, sku: 'D1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+        supabase.__setResult({ data: list, error: null });
+
+        const res = await getAllProducts({});
+        expect(res).toEqual(list);
+    });
+
+    it('handles error when retrieving all products', async () => {
+        const error = { message: 'Error retrieving products' };
+        supabase.__setResult({ data: null, error });
+        await expect(getAllProducts({})).rejects.toThrow(error.message);
+    });
+
     it('throws when creation fails (sad)', async () => {
         supabase.__setResult({ data: null, error: { message: 'insert failed' } });
         await expect(createProduct({ name: 'X', description: null, price: 1, quantity: 1, category_id: null, sku: null } as any)).rejects.toThrow('insert failed');
@@ -66,5 +80,31 @@ describe('Product Service Unit Tests', () => {
     it('throws when product not found (sad)', async () => {
         supabase.__setResult({ data: null, error: null });
         await expect(getProductById(999)).rejects.toThrow('Product not found');
+    });
+
+    it('updates a product successfully (happy)', async () => {
+        const payload = { name: 'Updated Product', price: 15 };
+        const updated = { id: 5, name: 'Updated Product', description: null, price: 15, quantity: 1, category_id: null, sku: 'E1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        supabase.__setResult({ data: updated, error: null });
+
+        const res = await updateProduct(5, payload as any);
+        expect(res).toEqual(updated);
+    });
+
+    it('returns null when product to update is not found', async () => {
+        supabase.__setResult({ data: null, error: null });
+        await expect(updateProduct(999, { name: 'Nonexistent' } as any)).rejects.toThrow('Product not found');
+    });
+
+    it('handles error when updating a product', async () => {
+        const error = { message: 'Error updating product' };
+        supabase.__setResult({ data: null, error });
+        await expect(updateProduct(1, { name: 'Error' } as any)).rejects.toThrow(error.message);
+    });
+
+    it('handles error when retrieving product by id', async () => {
+        const error = { message: 'Error retrieving product by id' };
+        supabase.__setResult({ data: null, error });
+        await expect(getProductById(1)).rejects.toThrow(error.message);
     });
 });

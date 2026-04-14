@@ -38,12 +38,41 @@ describe('Payment Service Unit Tests', () => {
         expect(result.payment.status).toBe('completed');
     });
 
+    it('handles error when createPayment fails during processPayment', async () => {
+        jest.spyOn(PaymentService, 'createPayment').mockRejectedValue(new Error('createPayment failed'));
+        await expect(PaymentService.processPayment({ order_id: 1, amount: 10, method: PaymentMethod.CREDIT_CARD } as any)).rejects.toThrow('createPayment failed');
+    });
+
     it('creates payment record successfully (happy)', async () => {
         const created = { id: 2, order_id: 5, amount: 50, method: PaymentMethod.WALLET, status: 'pending' } as any;
         supabase.__setResult({ data: created, error: null });
 
         const res = await PaymentService.createPayment(5, 50, PaymentMethod.WALLET);
         expect(res).toEqual(created);
+    });
+
+    it('handles error when creating payment record', async () => {
+        const error = { message: 'Error creating payment' };
+        supabase.__setResult({ data: null, error });
+        await expect(PaymentService.createPayment(6, 60, PaymentMethod.CREDIT_CARD)).rejects.toThrow(error.message);
+    });
+
+    it('retrieves payment by id successfully (happy)', async () => {
+        const payment = { id: 10, order_id: 100, amount: 100, method: PaymentMethod.CREDIT_CARD, status: 'completed' } as any;
+        supabase.__setResult({ data: payment, error: null });
+        const res = await PaymentService.getPaymentById(10);
+        expect(res).toEqual(payment);
+    });
+
+    it('returns null when payment by id is not found', async () => {
+        supabase.__setResult({ data: null, error: null });
+        await expect(PaymentService.getPaymentById(999)).rejects.toThrow('Payment not found');
+    });
+
+    it('handles error when updating payment status', async () => {
+        const error = { message: 'Error updating payment status' };
+        supabase.__setResult({ data: null, error });
+        await expect(PaymentService.updatePaymentStatus(1, 'failed')).rejects.toThrow(error.message);
     });
 
     it('refunds a completed payment successfully (happy)', async () => {
