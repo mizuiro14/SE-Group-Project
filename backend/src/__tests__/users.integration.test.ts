@@ -231,7 +231,7 @@ describe('Users Table Integration Tests', () => {
         .set('Cookie', authToken)
         .send(updateData);
 
-      expect([200, 400, 401]).toContain(res.status);
+      expect([200, 400, 401]).toContain(res.status); //! should  be one of the 3
     });
 
     it('should fail without authentication', async () => {
