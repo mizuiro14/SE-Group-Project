@@ -2,11 +2,13 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
+import DashboardHeader from '@/components/DashboardHeader';
 import { useTheme } from '@/theme/ThemeContext';
 import { 
-  Search, Bell, ShoppingCart, ChevronDown, Filter, 
-  Bookmark, RotateCcw, Plus, MoreHorizontal, Truck, Check
+  ChevronDown, Filter, Bookmark, RotateCcw, 
+  MoreHorizontal, Truck, Check, ShoppingCart
 } from 'lucide-react';
+import { ProductCard } from '@/components/ProductCard';
 
 // ==========================================
 // 1. TYPES & MOCK DATA
@@ -124,28 +126,7 @@ export default function MarketplacePage() {
       <main className="flex-1 flex flex-col overflow-hidden">
         
         {/* TOP NAVBAR */}
-        <header className={`h-16 ${theme.surface} border-b ${theme.border} flex items-center justify-between px-6 shrink-0 shadow-sm transition-colors duration-300`}>
-          <div className="flex-1 max-w-2xl relative">
-            <Search className={`w-4 h-4 ${theme.textSecondary} absolute left-3 top-1/2 -translate-y-1/2`} />
-            <input 
-              type="text" 
-              placeholder="Search marketplace products..." 
-              className={`w-full ${theme.background} border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-green-700 outline-none ${theme.textPrimary} placeholder-gray-400 transition-colors duration-300`}
-            />
-          </div>
-          <div className="flex items-center gap-4 ml-4">
-            <button className={`relative p-2 ${theme.textSecondary} hover:${theme.textPrimary} transition-colors`}>
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-2 w-2 h-2 bg-red-500 border border-white rounded-full"></span>
-            </button>
-            <button className={`relative p-2 ${theme.background} rounded-full ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`}>
-              <ShoppingCart className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 bg-green-800 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
-                3
-              </span>
-            </button>
-          </div>
-        </header>
+        <DashboardHeader searchPlaceholder="Search marketplace products..." />
 
         {/* CONTENT */}
         <div className="flex-1 overflow-auto p-8">
@@ -224,40 +205,19 @@ export default function MarketplacePage() {
 
           {/* Recommended Cards */}
           <h2 className={`text-lg font-bold ${theme.textPrimary} mb-4`}>Recommended for You</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            {/* Card 1 */}
-            <div className={`${theme.surface} rounded-2xl p-4 shadow-sm relative group cursor-pointer border ${theme.border} hover:border-green-700/30 transition-all hover:shadow-md`}>
-              <span className="absolute top-4 left-4 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded z-10">SALE</span>
-              <div className={`h-40 flex items-center justify-center mb-4 ${theme.background} rounded-xl overflow-hidden`}>
-                <img src="https://via.placeholder.com/80x200?text=Oil" alt="Olive Oil" className="h-full object-contain mix-blend-multiply opacity-90" />
-              </div>
-              <p className="text-xs text-green-600 font-bold mb-1 uppercase tracking-wide">Pantry Essentials</p>
-              <h3 className={`font-bold ${theme.textPrimary} text-sm mb-3`}>Artisan Organic Olive Oil</h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-baseline gap-2">
-                  <span className={`font-bold ${theme.textPrimary}`}>$24.00</span>
-                  <span className={`text-xs ${theme.textSecondary} line-through`}>$30.00</span>
-                </div>
-                <button className={`w-8 h-8 rounded-full ${theme.background} flex items-center justify-center ${theme.textSecondary} hover:bg-green-800 hover:text-white transition-colors`}>
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Card 2 */}
-            <div className={`${theme.surface} rounded-2xl p-4 shadow-sm relative group cursor-pointer border ${theme.border} hover:border-green-700/30 transition-all hover:shadow-md`}>
-              <div className={`h-40 flex items-center justify-center mb-4 ${theme.background} rounded-xl overflow-hidden`}>
-                <img src="https://via.placeholder.com/150x100?text=Bread" alt="Sourdough Loaf" className="h-full object-contain mix-blend-multiply opacity-90" />
-              </div>
-              <p className="text-xs text-green-600 font-bold mb-1 uppercase tracking-wide">Fresh Bakery</p>
-              <h3 className={`font-bold ${theme.textPrimary} text-sm mb-3`}>Rustic Sourdough Loaf</h3>
-              <div className="flex items-center justify-between">
-                <span className={`font-bold ${theme.textPrimary}`}>$8.50</span>
-                <button className={`w-8 h-8 rounded-full ${theme.background} flex items-center justify-center ${theme.textSecondary} hover:bg-green-800 hover:text-white transition-colors`}>
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+              <ProductCard 
+                  id="1" 
+                  name="Organic Fertilizer" 
+                  price={24.99} 
+                  stockCount={15} 
+              />
+              <ProductCard 
+                  id="2" 
+                  name="Premium Seeds" 
+                  price={12.50} 
+                  stockCount={0} 
+              />
           </div>
 
           {/* All Products List */}

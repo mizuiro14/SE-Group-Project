@@ -1,6 +1,7 @@
 "use client"; 
 
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AlertCircle, CheckCircle2, X } from "lucide-react";
@@ -85,12 +86,12 @@ export default function SignupPage() {
               <p className="text-gray-600 text-sm">{error}</p>
             </div>
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button 
+              <Button 
+                variant="secondary"
                 onClick={() => setError("")}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
               >
                 Try Again
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -116,12 +117,12 @@ export default function SignupPage() {
               <p className="text-gray-600 text-sm">Signup successful! You can now log in to your account.</p>
             </div>
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button 
+              <Button 
+                variant="primary"
                 onClick={handleSuccessClose}
-                className="px-4 py-2 bg-brand-primary text-white text-sm font-medium rounded-lg hover:bg-brand-secondary transition-colors shadow-sm focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
               >
                 Proceed to Login
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -169,7 +170,7 @@ export default function SignupPage() {
               placeholder="John Doe" 
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
+              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-[#8EAD45] outline-none transition-all text-black"
             />
           </div>
 
@@ -181,7 +182,7 @@ export default function SignupPage() {
               placeholder="e.g., +63 912 345 6789" 
               value={formData.contact}
               onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
+              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-[#8EAD45] outline-none transition-all text-black"
             />
           </div>
 
@@ -195,7 +196,7 @@ export default function SignupPage() {
                 placeholder="e.g., Jaro, Iloilo" 
                 value={formData.branch}
                 onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
+                className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-[#8EAD45] outline-none transition-all text-black"
               />
             </div>
           )}
@@ -208,7 +209,7 @@ export default function SignupPage() {
               placeholder="name@example.com" 
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
+              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-[#8EAD45] outline-none transition-all text-black"
             />
           </div>
           
@@ -220,22 +221,23 @@ export default function SignupPage() {
               placeholder="Create a password" 
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-brand-primary outline-none transition-all text-black"
+              className="border border-gray-300 p-2.5 rounded-md focus:ring-2 focus:ring-[#8EAD45] outline-none transition-all text-black"
             />
           </div>
 
-          <button 
+          <Button 
             type="submit" 
+            variant="secondary"
             disabled={loading}
-            className="bg-brand-primary text-white p-2.5 rounded-md hover:bg-brand-secondary font-medium transition-colors mt-2 shadow-lg disabled:opacity-50"
+            className="mt-2 shadow-lg w-full py-2.5"
           >
             {loading ? "Signing up..." : "Sign Up"}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
           Already have an account?{" "}
-          <Link href="/login" className="text-brand-primary hover:underline font-medium">Log in here</Link>
+          <Link href="/login" className="text-[#8EAD45] hover:underline font-medium">Log in here</Link>
         </div>
       </div>
     </div>

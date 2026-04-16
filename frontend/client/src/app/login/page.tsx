@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
@@ -69,12 +70,12 @@ export default function LoginPage() {
               <p className="text-gray-600 text-sm">{error}</p>
             </div>
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button 
+              <Button 
+                variant="secondary"
                 onClick={() => setError("")}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
               >
                 Try Again
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -110,13 +111,14 @@ export default function LoginPage() {
             />
           </div>
 
-          <button 
+          <Button 
             type="submit" 
+            variant="secondary"
             disabled={loading}
-            className="bg-brand-primary text-white p-2.5 rounded-md hover:bg-brand-secondary font-medium transition-colors mt-2 shadow-lg disabled:opacity-50"
+            className="mt-2 shadow-lg w-full py-2.5"
           >
             {loading ? "Logging in..." : "Log In"}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
