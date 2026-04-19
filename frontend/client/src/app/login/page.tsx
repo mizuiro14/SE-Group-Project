@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
+import { useAuth } from "@/context/AuthContext"; // <-- Import the Auth hook
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth(); // <-- Destructure refreshUser
+  
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,11 +21,10 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // NOTE: Replace the URL with your actual backend URL 
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // <-- IMPORTANT: Tell fetch to receive the cookie
+        credentials: "include",
         body: JSON.stringify(formData),
       });
 
@@ -36,8 +38,10 @@ export default function LoginPage() {
 
       if (!res.ok) throw new Error(data?.error || "Failed to log in");
 
-      // The browser automatically caught the secure HTTP-only Set-Cookie header.
-      // Simply redirect the user.
+      // 1. Tell React Context to fetch the new user status (syncs the navbars/tabs globally)
+      await refreshUser();
+      
+      // 2. Smoothly transition to marketplace without reloading the web page
       router.push("/marketplace");
       
     } catch (err: any) {

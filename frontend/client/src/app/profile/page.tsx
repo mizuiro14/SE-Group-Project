@@ -8,6 +8,7 @@ import {
   Search, Bell, ShoppingCart, MapPin, Phone, 
   Package, Key, Shield, LogOut, Plus, Edit2, Trash2, ChevronDown, CreditCard, Mail, Building, Sun, Moon
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 // ============================================================================
 // --- STRATEGY PATTERN TYPES & INTERFACES (Payment Methods) ---
@@ -147,6 +148,7 @@ export default function ProfilePage() {
 
   // --- GLOBAL THEME INTEGRATION ---
   const { theme, isDarkMode, toggleTheme } = useTheme();
+  const { logout } = useAuth();
 
   // Form State
   const [editFirstName, setEditFirstName] = useState('');
@@ -187,18 +189,9 @@ export default function ProfilePage() {
     fetchUser();
   }, [router]);
 
-  const handleLogout = async () => {
-    try {
-      await fetch("http://localhost:5000/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (err) {
-      console.error("Error during logout", err);
-    } finally {
-      router.push('/');
-    }
-  };
+  const handleLogout = () => {
+  logout();
+};
 
   const handleSaveChanges = async () => {
     setIsSaving(true);

@@ -6,9 +6,10 @@ import DashboardHeader from '@/components/DashboardHeader';
 import { useTheme } from '@/theme/ThemeContext';
 import { 
   ChevronDown, Filter, Bookmark, RotateCcw, 
-  MoreHorizontal, Truck, Check, ShoppingCart
+  MoreHorizontal, Truck, Check, ShoppingCart, Plus, X
 } from 'lucide-react';
 import { ProductCard } from '@/components/ProductCard';
+import { useAuth } from '@/context/AuthContext';
 
 // ==========================================
 // 1. TYPES & MOCK DATA
@@ -40,38 +41,29 @@ interface ProductFilter {
   filter(products: Product[]): Product[];
 }
 
-// Base Component: Returns all products
 class BaseFilter implements ProductFilter {
   filter(products: Product[]): Product[] {
     return products;
   }
 }
 
-// Abstract Decorator
 abstract class FilterDecorator implements ProductFilter {
   protected filterComponent: ProductFilter;
-  
   constructor(filterComponent: ProductFilter) {
     this.filterComponent = filterComponent;
   }
-  
   abstract filter(products: Product[]): Product[];
 }
 
-// Concrete Decorator: Filters by matching ANY of the selected categories
 class CategoryFilter extends FilterDecorator {
   private selectedCategories: string[];
-  
   constructor(filterComponent: ProductFilter, selectedCategories: string[]) {
     super(filterComponent);
     this.selectedCategories = selectedCategories;
   }
-  
   filter(products: Product[]): Product[] {
     const previousFiltered = this.filterComponent.filter(products);
-    // If no categories are selected, return all
     if (this.selectedCategories.length === 0) return previousFiltered;
-    // Otherwise, check if the product's category is in the selected list
     return previousFiltered.filter(p => this.selectedCategories.includes(p.category));
   }
 }
@@ -80,14 +72,31 @@ class CategoryFilter extends FilterDecorator {
 // 3. MAIN COMPONENT
 // ==========================================
 export default function MarketplacePage() {
+  const { theme, isDarkMode } = useTheme();
+  const { isSeller } = useAuth(); 
+
+  // --- STATE ---
+  // Convert standard mock data to state so we can mutate it
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  
+  // --- ADD ITEM MODAL STATE ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newItemForm, setNewItemForm] = useState<{
+    name: string;
+    category: string;
+    stock: number | '';
+    price: number | '';
+  }>({
+    name: '',
+    category: CATEGORIES[0], // Default exactly to first category
+    stock: '', // Initialize empty instead of 0
+    price: ''  // Initialize empty instead of 0
+  });
 
-  // Bring in the global theme
-  const { theme, isDarkMode } = useTheme();
-
-  // Close custom dropdown when clicking outside
+  // Close custom drop downs when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -106,7 +115,41 @@ export default function MarketplacePage() {
     );
   };
 
-  // Apply the decorator pattern filtering
+  // Add Item Logic
+  const handleAddNewItem = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const stockNum = Number(newItemForm.stock) || 0;
+    const priceNum = Number(newItemForm.price) || 0;
+    
+    // Determine Availability Status mathematically based on your rules
+    let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+    if (stockNum > 30) {
+      computedStatus = 'In Stock';
+    } else if (stockNum > 0 && stockNum <= 30) {
+      computedStatus = 'Low Stock';
+    }
+
+    // Build the new specific Product object
+    const newProduct: Product = {
+      id: Math.random().toString(36).substr(2, 9), // Quick temporary ID logic
+      name: newItemForm.name,
+      category: newItemForm.category,
+      price: priceNum,
+      stockText: `${stockNum} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
+      status: computedStatus,
+      imageLetter: newItemForm.name.charAt(0).toUpperCase() || 'P'
+    };
+
+    // Push it onto our localized Product State array
+    setProducts(prev => [newProduct, ...prev]);
+
+    // Cleanup and close
+    setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '' });
+    setIsModalOpen(false);
+  };
+
+  // Apply the decorator pattern filtering using our state variables
   const filteredProducts = useMemo(() => {
     let productFilter: ProductFilter = new BaseFilter();
     
@@ -114,12 +157,105 @@ export default function MarketplacePage() {
       productFilter = new CategoryFilter(productFilter, selectedCategories);
     }
     
-    return productFilter.filter(MOCK_PRODUCTS);
-  }, [selectedCategories]);
+    return productFilter.filter(products); // Use the STATE variable here!
+  }, [selectedCategories, products]);
 
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>
       
+      {/* ----------------- MODAL OVERLAY ----------------- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`${theme.surface} rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border ${theme.border}`}>
+            <div className={`p-5 border-b ${theme.border} flex justify-between items-center`}>
+              <h3 className={`font-bold ${theme.textPrimary}`}>Add New Marketplace Item</h3>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className={`p-1 rounded-md ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors outline-none`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddNewItem} className="p-5 flex flex-col gap-4">
+              {/* Product Name */}
+              <div className="flex flex-col gap-1.5">
+                <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Name</label>
+                <input 
+                  required
+                  type="text" 
+                  value={newItemForm.name}
+                  onChange={e => setNewItemForm({...newItemForm, name: e.target.value})}
+                  className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
+                  placeholder="e.g. Organic Apple Juice"
+                />
+              </div>
+
+              {/* Category Dropdown */}
+              <div className="flex flex-col gap-1.5">
+                <label className={`text-sm font-bold ${theme.textSecondary}`}>Category</label>
+                <select 
+                  required
+                  value={newItemForm.category}
+                  onChange={e => setNewItemForm({...newItemForm, category: e.target.value})}
+                  className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Price */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Price ($)</label>
+                  <input 
+                    required
+                    type="number" 
+                    step="0.01"
+                    min="0"
+                    value={newItemForm.price}
+                    onChange={e => setNewItemForm({...newItemForm, price: e.target.value === '' ? '' : parseFloat(e.target.value)})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
+                  />
+                </div>
+
+                {/* Stock Amount */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Stock Amount</label>
+                  <input 
+                    required
+                    type="number" 
+                    min="0"
+                    value={newItemForm.stock}
+                    onChange={e => setNewItemForm({...newItemForm, stock: e.target.value === '' ? '' : parseInt(e.target.value)})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
+                  />
+                </div>
+              </div>
+
+              <div className={`mt-4 pt-4 border-t ${theme.border} flex justify-end gap-3`}>
+                <button 
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm ${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover} transition-colors`}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-2 rounded-lg font-medium text-sm text-white bg-green-800 hover:bg-green-900 transition-colors shadow-sm"
+                >
+                  Done
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ----------------------------------------------- */}
+
       <Sidebar />
 
       {/* MAIN CONTENT AREA */}
@@ -131,28 +267,22 @@ export default function MarketplacePage() {
         {/* CONTENT */}
         <div className="flex-1 overflow-auto p-8">
           
-          {/* Top Banner Card */}
-          <div className={`${theme.surface} rounded-2xl p-4 mb-8 flex items-center justify-between shadow-sm border ${theme.border} transition-colors duration-300`}>
-            <div className="flex items-center gap-4">
-              <div className={`w-10 h-10 ${isDarkMode ? 'bg-green-900/30' : 'bg-[#E5F0E6]'} rounded-full flex items-center justify-center`}>
-                <Truck className="w-5 h-5 text-green-600" />
-              </div>
+          {/* Top Banner Card (ONLY SHOWS FOR SELLERS) */}
+          {isSeller && (
+            <div className={`${theme.surface} rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm border ${theme.border} transition-colors duration-300 gap-4`}>
               <div>
-                <h3 className={`font-semibold ${theme.textPrimary}`}>Next Delivery Arriving</h3>
-                <p className={`text-sm ${theme.textSecondary}`}>Today between 2:00 PM - 4:00 PM</p>
+                <h3 className={`font-semibold ${theme.textPrimary} text-lg`}>Manage Your Products</h3>
+                <p className={`text-sm ${theme.textSecondary}`}>Add new items to the marketplace from your inventory.</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className={`px-4 py-2 border ${theme.border} rounded-lg text-sm font-medium ${theme.textPrimary} bg-transparent hover:${theme.surfaceHover} shadow-sm flex items-center gap-2 transition-colors`}>
-                <Bookmark className={`w-4 h-4 ${theme.textSecondary}`} />
-                Saved
-              </button>
-              <button className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors">
-                <RotateCcw className="w-4 h-4" />
-                Reorder
+              <button 
+                onClick={() => setIsModalOpen(true)} // <-- Toggles modal here
+                className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors"
+              >
+                <Plus className="w-5 h-5 flex-shrink-0" />
+                Add New Items
               </button>
             </div>
-          </div>
+          )}
 
           {/* Marketplace Header */}
           <div className="flex flex-col lg:flex-row items-start lg:items-end justify-between mb-6 gap-4">
@@ -160,13 +290,8 @@ export default function MarketplacePage() {
               <h1 className={`text-3xl font-bold tracking-tight ${theme.textPrimary} mb-2`}>Member Marketplace</h1>
               <p className={`text-sm ${theme.textSecondary} font-medium`}>Exclusive deals and fresh arrivals for you.</p>
             </div>
+            {/* Filter Dropdown Area */}
             <div className="flex flex-wrap items-center gap-2">
-              <button className="px-4 py-1.5 bg-green-800 text-white rounded-full text-sm font-medium shadow-sm transition-colors">All</button>
-              <button className={`px-4 py-1.5 ${theme.surface} ${theme.textPrimary} rounded-full text-sm font-medium hover:${theme.surfaceHover} shadow-sm border ${theme.border} transition-colors`}>Organic</button>
-              <button className={`px-4 py-1.5 ${theme.surface} ${theme.textPrimary} rounded-full text-sm font-medium hover:${theme.surfaceHover} shadow-sm border ${theme.border} transition-colors`}>Pantry</button>
-              <button className={`px-4 py-1.5 ${theme.surface} ${theme.textPrimary} rounded-full text-sm font-medium hover:${theme.surfaceHover} shadow-sm border ${theme.border} transition-colors`}>Snacks</button>
-              
-              {/* Custom Multi-Select Dropdown Component */}
               <div className="relative ml-2" ref={filterRef}>
                 <button 
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -203,21 +328,10 @@ export default function MarketplacePage() {
             </div>
           </div>
 
-          {/* Recommended Cards */}
           <h2 className={`text-lg font-bold ${theme.textPrimary} mb-4`}>Recommended for You</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-              <ProductCard 
-                  id="1" 
-                  name="Organic Fertilizer" 
-                  price={24.99} 
-                  stockCount={15} 
-              />
-              <ProductCard 
-                  id="2" 
-                  name="Premium Seeds" 
-                  price={12.50} 
-                  stockCount={0} 
-              />
+              <ProductCard id="1" name="Organic Fertilizer" price={24.99} stockCount={15} />
+              <ProductCard id="2" name="Premium Seeds" price={12.50} stockCount={0} />
           </div>
 
           {/* All Products List */}
@@ -231,6 +345,7 @@ export default function MarketplacePage() {
             </div>
             
             <table className="w-full text-sm text-left">
+               {/* Table Headers unchanged */}
               <thead>
                 <tr className={`text-xs ${theme.textSecondary} uppercase tracking-wider border-b ${theme.border}`}>
                   <th className="pb-3 w-8"><input type="checkbox" className={`rounded text-green-700 focus:ring-green-700 ${theme.background} border-gray-400`} /></th>
@@ -263,7 +378,7 @@ export default function MarketplacePage() {
                       <td className={`py-4 font-bold ${product.status === 'Low Stock' ? 'text-red-500' : `${theme.textSecondary} font-medium`}`}>
                         {product.stockText}
                       </td>
-                      <td className={`py-4 font-bold ${theme.textPrimary}`}>${product.price.toFixed(2)}</td>
+                      <td className={`py-4 font-bold ${theme.textPrimary}`}>${Number(product.price).toFixed(2)}</td>
                       <td className="py-4">
                         <span className={`text-xs font-bold px-3 py-1 rounded-full ${
                           product.status === 'In Stock' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-[#E5F0E6] text-[#2C3E2D]') : 
