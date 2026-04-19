@@ -24,14 +24,6 @@ export interface Product {
   imageLetter: string;
 }
 
-const MOCK_PRODUCTS: Product[] = [
-  { id: '1', name: 'Daily Essential Vitamins', category: 'Vitamins', stockText: '120 in stock', price: 24.50, status: 'In Stock', imageLetter: 'V' },
-  { id: '2', name: 'Green Superfood Juice', category: 'Juice', stockText: '45 in stock', price: 12.00, status: 'In Stock', imageLetter: 'J' },
-  { id: '3', name: 'Organic Barley Powder', category: 'Powder', stockText: '5 Low Stock', price: 34.00, status: 'Low Stock', imageLetter: 'P' },
-  { id: '4', name: 'Barley Grass Capsules', category: 'Pills', stockText: '82 in stock', price: 18.00, status: 'In Stock', imageLetter: 'P' },
-  { id: '5', name: 'Kids Barley Gummies', category: 'Gummy', stockText: '0 in stock', price: 15.50, status: 'Out of Stock', imageLetter: 'G' },
-];
-
 const CATEGORIES = ['Vitamins', 'Juice', 'Powder', 'Pills', 'Gummy'];
 
 // ==========================================
@@ -76,8 +68,7 @@ export default function MarketplacePage() {
   const { isSeller } = useAuth(); 
 
   // --- STATE ---
-  // Convert standard mock data to state so we can mutate it
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -91,10 +82,42 @@ export default function MarketplacePage() {
     price: number | '';
   }>({
     name: '',
-    category: CATEGORIES[0], // Default exactly to first category
-    stock: '', // Initialize empty instead of 0
-    price: ''  // Initialize empty instead of 0
+    category: CATEGORIES[0], 
+    stock: '', 
+    price: ''  
   });
+
+  // Fetch Global Products on Mount
+  useEffect(() => {
+    const fetchGlobalProducts = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/products'); 
+        const dbProducts = await response.json();
+        
+        const mappedProducts: Product[] = dbProducts.map((p: any) => {
+          let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+          if (p.quantity > 30) computedStatus = 'In Stock';
+          else if (p.quantity > 0) computedStatus = 'Low Stock';
+
+          return {
+            id: String(p.id),
+            name: p.name,
+            category: p.category || 'Uncategorized',
+            stockText: `${p.quantity} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
+            price: p.price,
+            status: computedStatus,
+            imageLetter: p.name.charAt(0).toUpperCase() || 'P'
+          };
+        });
+
+        setProducts(mappedProducts);
+      } catch (error) {
+        console.error('Failed to fetch marketplace items', error);
+      }
+    };
+
+    fetchGlobalProducts();
+  }, []);
 
   // Close custom drop downs when clicking outside
   useEffect(() => {
@@ -116,37 +139,68 @@ export default function MarketplacePage() {
   };
 
   // Add Item Logic
-  const handleAddNewItem = (e: React.FormEvent) => {
+  const handleAddNewItem = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const stockNum = Number(newItemForm.stock) || 0;
     const priceNum = Number(newItemForm.price) || 0;
-    
-    // Determine Availability Status mathematically based on your rules
-    let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
-    if (stockNum > 30) {
-      computedStatus = 'In Stock';
-    } else if (stockNum > 0 && stockNum <= 30) {
-      computedStatus = 'Low Stock';
+
+    try {
+      // POST the real data to your API to save it for everyone
+      const categoryMap: Record<string, number> = {
+        'Vitamins': 1,
+        'Juice': 2,
+        'Powder': 3,
+        'Pills': 4,
+        'Gummy': 5
+      };
+      const categoryId = categoryMap[newItemForm.category] || null;
+      const response = await fetch('http://localhost:5000/api/products', {
+        method: 'POST',
+        headers: {
+           'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: newItemForm.name,
+          price: priceNum,
+          quantity: stockNum,
+          category_id: categoryId,
+          description: `Added by Seller from Marketplace Page`
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Server returned an error');
+      }
+
+      const savedDbProduct = await response.json();
+
+      let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+      if (stockNum > 30) computedStatus = 'In Stock';
+      else if (stockNum > 0) computedStatus = 'Low Stock';
+
+      // Build the product card format 
+      const newProduct: Product = {
+        id: String(savedDbProduct.id), 
+        name: savedDbProduct.name,
+        category: newItemForm.category,
+        price: savedDbProduct.price,
+        stockText: `${stockNum} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
+        status: computedStatus,
+        imageLetter: savedDbProduct.name.charAt(0).toUpperCase() || 'P'
+      };
+
+      // Put it in our local state instantly for a snappy UI
+      setProducts(prev => [newProduct, ...prev]);
+
+      // Cleanup and close
+      setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '' });
+      setIsModalOpen(false);
+
+    } catch (err) {
+       console.error("Failed to list item globally", err);
     }
-
-    // Build the new specific Product object
-    const newProduct: Product = {
-      id: Math.random().toString(36).substr(2, 9), // Quick temporary ID logic
-      name: newItemForm.name,
-      category: newItemForm.category,
-      price: priceNum,
-      stockText: `${stockNum} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
-      status: computedStatus,
-      imageLetter: newItemForm.name.charAt(0).toUpperCase() || 'P'
-    };
-
-    // Push it onto our localized Product State array
-    setProducts(prev => [newProduct, ...prev]);
-
-    // Cleanup and close
-    setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '' });
-    setIsModalOpen(false);
   };
 
   // Apply the decorator pattern filtering using our state variables
@@ -157,7 +211,7 @@ export default function MarketplacePage() {
       productFilter = new CategoryFilter(productFilter, selectedCategories);
     }
     
-    return productFilter.filter(products); // Use the STATE variable here!
+    return productFilter.filter(products); 
   }, [selectedCategories, products]);
 
   return (
@@ -275,7 +329,7 @@ export default function MarketplacePage() {
                 <p className={`text-sm ${theme.textSecondary}`}>Add new items to the marketplace from your inventory.</p>
               </div>
               <button 
-                onClick={() => setIsModalOpen(true)} // <-- Toggles modal here
+                onClick={() => setIsModalOpen(true)}
                 className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors"
               >
                 <Plus className="w-5 h-5 flex-shrink-0" />
@@ -345,7 +399,6 @@ export default function MarketplacePage() {
             </div>
             
             <table className="w-full text-sm text-left">
-               {/* Table Headers unchanged */}
               <thead>
                 <tr className={`text-xs ${theme.textSecondary} uppercase tracking-wider border-b ${theme.border}`}>
                   <th className="pb-3 w-8"><input type="checkbox" className={`rounded text-green-700 focus:ring-green-700 ${theme.background} border-gray-400`} /></th>
