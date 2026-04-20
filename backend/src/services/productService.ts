@@ -7,6 +7,7 @@ export interface Product {
     price: number;
     quantity: number;
     category_id: number | null;
+    category: string | null;
     sku: string | null;
     created_at: string;
     updated_at: string;
@@ -18,7 +19,7 @@ export const getAllProducts = async (filters?: {
     limit?: number;
     offset?: number;
 }): Promise<Product[]> => {
-    let query = supabase.from('products').select('*');
+    let query = supabase.from('products').select('*, categories(name)');
 
     if (filters?.category_id) {
         query = query.eq('category_id', filters.category_id);
@@ -36,11 +37,14 @@ export const getAllProducts = async (filters?: {
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((item: any) => ({
+        ...item,
+        category: item.categories?.name || null
+    }));
 };
 
 export const getProductById = async (id: number): Promise<Product> => {
-    const { data, error } = await supabase
+    const { data, error } = await supabase            
         .from('products')
         .select('*')
         .eq('id', id)
@@ -51,7 +55,7 @@ export const getProductById = async (id: number): Promise<Product> => {
     return data;
 };
 
-export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> => {
+export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'category'>): Promise<Product> => {
     const { data, error } = await supabase
         .from('products')
         .insert([{

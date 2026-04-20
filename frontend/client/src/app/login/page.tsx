@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AlertCircle, X } from "lucide-react";
+import { useAuth } from "@/context/AuthContext"; // <-- Import the Auth hook
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth(); // <-- Destructure refreshUser
+  
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,11 +21,10 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // NOTE: Replace the URL with your actual backend URL 
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // <-- IMPORTANT: Tell fetch to receive the cookie
+        credentials: "include",
         body: JSON.stringify(formData),
       });
 
@@ -35,8 +38,10 @@ export default function LoginPage() {
 
       if (!res.ok) throw new Error(data?.error || "Failed to log in");
 
-      // The browser automatically caught the secure HTTP-only Set-Cookie header.
-      // Simply redirect the user.
+      // 1. Tell React Context to fetch the new user status (syncs the navbars/tabs globally)
+      await refreshUser();
+      
+      // 2. Smoothly transition to marketplace without reloading the web page
       router.push("/marketplace");
       
     } catch (err: any) {
@@ -69,12 +74,12 @@ export default function LoginPage() {
               <p className="text-gray-600 text-sm">{error}</p>
             </div>
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button 
+              <Button 
+                variant="secondary"
                 onClick={() => setError("")}
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
               >
                 Try Again
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -110,13 +115,14 @@ export default function LoginPage() {
             />
           </div>
 
-          <button 
+          <Button 
             type="submit" 
+            variant="secondary"
             disabled={loading}
-            className="bg-brand-primary text-white p-2.5 rounded-md hover:bg-brand-secondary font-medium transition-colors mt-2 shadow-lg disabled:opacity-50"
+            className="mt-2 shadow-lg w-full py-2.5"
           >
             {loading ? "Logging in..." : "Log In"}
-          </button>
+          </Button>
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
