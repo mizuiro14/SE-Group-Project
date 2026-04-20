@@ -48,7 +48,8 @@ export const signup = async (
             user_email: email, 
             username: username, 
             cellphone_number: contact, 
-            role: role 
+            role: role,
+            branch: branch
         });
     } catch (err: any) {
         console.error('Error creating user in custom users table:', err.message);
