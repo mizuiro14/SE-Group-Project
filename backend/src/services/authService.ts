@@ -1,5 +1,11 @@
 import { supabase } from '../SupabaseClient';
-import { createUser } from './userService';
+import { createUser, User as UserServiceUser } from './userService'; // Alias User from userService
+import { SellerService } from './sellerService';
+import { BuyerService } from './buyerService';
+// import { User } from '../types/user'; // Removed to avoid type conflict with userService.User
+
+const sellerService = new SellerService();
+const buyerService = new BuyerService();
 
 export const signup = async (
     email: string, 
@@ -43,17 +49,44 @@ export const signup = async (
     }
 
     // 2. Also create user in your custom public.users database table
+    let createdUserInPublicTable: UserServiceUser | null = null; // Use aliased User type
     try {
-        await createUser({ 
-            user_email: email, 
-            username: username, 
-            cellphone_number: contact, 
-            role: role,
-            branch: branch
-        });
+        // Ensure the ID from Supabase Auth is used for the public.users table
+        if (data.user) {
+            const usersInPublicTable = await createUser({ 
+                id: parseInt(data.user.id, 10), // Assuming public.users.id is numeric and matches auth.uid
+                user_email: email, // Use user_email as expected by userService.User
+                username: username, 
+                cellphone_number: contact, 
+                role: role 
+            });
+            if (usersInPublicTable && usersInPublicTable.length > 0) {
+                createdUserInPublicTable = usersInPublicTable[0];
+            }
+        }
     } catch (err: any) {
         console.error('Error creating user in custom users table:', err.message);
         // Don't throw - auth was successful, users table creation is secondary
+    }
+
+    // 3. Conditionally create seller or buyer profile
+    if (createdUserInPublicTable && createdUserInPublicTable.id && role) {
+        if (role === 'seller') {
+            await sellerService.createSeller({ 
+                user_id: createdUserInPublicTable.id, 
+                branch: branch || 'Default Branch',
+                rating: null // Provide default null for rating
+            });
+        } else if (role === 'buyer') {
+            await buyerService.createBuyer({ 
+                user_id: createdUserInPublicTable.id,
+                region: null, // Provide default null for optional fields
+                province: null,
+                city: null,
+                barangay: null,
+                street_address: null
+            });
+        }
     }
 
     return data;
