@@ -189,7 +189,7 @@ export default function SignupPage() {
           {/* Conditional Branch Field - Only shows if Role is Seller */}
           {formData.role === "seller" && (
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Branch <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium text-gray-700">Location <span className="text-red-500">*</span></label>
               <input 
                 type="text" 
                 required={formData.role === "seller"} 

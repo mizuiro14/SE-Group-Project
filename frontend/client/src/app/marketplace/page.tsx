@@ -6,7 +6,7 @@ import DashboardHeader from '@/components/DashboardHeader';
 import { useTheme } from '@/theme/ThemeContext';
 import { 
   ChevronDown, Filter, Bookmark, RotateCcw, 
-  MoreHorizontal, Truck, Check, ShoppingCart, Plus, X
+  MoreHorizontal, Truck, Check, ShoppingCart, Plus, X, Image as ImageIcon, Tag, Loader2
 } from 'lucide-react';
 import { ProductCard } from '@/components/ProductCard';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +22,10 @@ export interface Product {
   price: number;
   status: 'In Stock' | 'Low Stock' | 'Out of Stock';
   imageLetter: string;
+  description?: string;
+  imageUrl?: string;
+  // keep raw stock available for product card check
+  rawStock: number; 
 }
 
 const CATEGORIES = ['Vitamins', 'Juice', 'Powder', 'Pills', 'Gummy'];
@@ -65,7 +69,7 @@ class CategoryFilter extends FilterDecorator {
 // ==========================================
 export default function MarketplacePage() {
   const { theme, isDarkMode } = useTheme();
-  const { isSeller } = useAuth(); 
+  const { isSeller, user } = useAuth(); 
 
   // --- STATE ---
   const [products, setProducts] = useState<Product[]>([]);
@@ -80,12 +84,24 @@ export default function MarketplacePage() {
     category: string;
     stock: number | '';
     price: number | '';
+    description: string;
+    imageFile: File | null;
   }>({
     name: '',
     category: CATEGORIES[0], 
     stock: '', 
-    price: ''  
+    price: '',
+    description: '',
+    imageFile: null
   });
+
+  // --- PRODUCT DETAILS MODAL STATE ---
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // --- BUY PRODUCT MODAL STATE ---
+  const [productToBuy, setProductToBuy] = useState<Product | null>(null);
+  const [purchaseQuantity, setPurchaseQuantity] = useState<number>(1);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   // Fetch Global Products on Mount
   useEffect(() => {
@@ -106,7 +122,10 @@ export default function MarketplacePage() {
             stockText: `${p.quantity} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
             price: p.price,
             status: computedStatus,
-            imageLetter: p.name.charAt(0).toUpperCase() || 'P'
+            imageLetter: p.name.charAt(0).toUpperCase() || 'P',
+            description: p.description || 'No description available for this product.',
+            imageUrl: p.image_url || undefined, // Placeholder for database column
+            rawStock: p.quantity || 0,
           };
         });
 
@@ -161,11 +180,12 @@ export default function MarketplacePage() {
            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          seller_id: user?.id,
           name: newItemForm.name,
           price: priceNum,
           quantity: stockNum,
           category_id: categoryId,
-          description: `Added by Seller from Marketplace Page`
+          description: newItemForm.description || `Added by Seller from Marketplace Page`
         })
       });
 
@@ -188,18 +208,87 @@ export default function MarketplacePage() {
         price: savedDbProduct.price,
         stockText: `${stockNum} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
         status: computedStatus,
-        imageLetter: savedDbProduct.name.charAt(0).toUpperCase() || 'P'
+        imageLetter: savedDbProduct.name.charAt(0).toUpperCase() || 'P',
+        description: savedDbProduct.description,
+        rawStock: stockNum
       };
 
       // Put it in our local state instantly for a snappy UI
       setProducts(prev => [newProduct, ...prev]);
 
       // Cleanup and close
-      setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '' });
+      setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '', description: '', imageFile: null });
       setIsModalOpen(false);
 
     } catch (err) {
        console.error("Failed to list item globally", err);
+    }
+  };
+
+  // Open Buy Modal
+  const handleOpenBuyModal = (product: Product) => {
+    setProductToBuy(product);
+    setPurchaseQuantity(1); // Default to buying 1
+  };
+
+  // Process the Purchase and Decrement Stock
+  const handleConfirmPurchase = async () => {
+    if (!productToBuy) return;
+    
+    if (purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock) {
+        alert("Please enter a valid quantity.");
+        return;
+    }
+
+    setIsPurchasing(true);
+
+    try {
+        const remainingStock = productToBuy.rawStock - purchaseQuantity;
+
+        // Call our backend to deduct the stock
+        const response = await fetch(`http://localhost:5000/api/products/${productToBuy.id}/quantity`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ quantity: remainingStock })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to complete purchase');
+        }
+
+        // Recompute the status based on the remaining stock
+        let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+        if (remainingStock > 30) computedStatus = 'In Stock';
+        else if (remainingStock > 0) computedStatus = 'Low Stock';
+
+        // Visually update the product in our list without a full page refresh
+        setProducts(prevProducts => prevProducts.map(p => {
+             if (p.id === productToBuy.id) {
+                 return {
+                     ...p,
+                     rawStock: remainingStock,
+                     status: computedStatus,
+                     stockText: `${remainingStock} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`
+                 }
+             }
+             return p;
+        }));
+        
+        // Let the user know they succeeded
+        alert(`Successfully purchased ${purchaseQuantity} of ${productToBuy.name}!`);
+
+        // Clean up both modals
+        setProductToBuy(null);
+        setSelectedProduct(null);
+        
+    } catch (err: any) {
+        console.error(err);
+        alert(err.message || 'An error occurred during purchase.');
+    } finally {
+        setIsPurchasing(false);
     }
   };
 
@@ -214,97 +303,281 @@ export default function MarketplacePage() {
     return productFilter.filter(products); 
   }, [selectedCategories, products]);
 
+  // Recommended Products: Grab 4 random products that are strictly "In Stock"
+  const recommendedProducts = useMemo(() => {
+    const inStockOnly = products.filter(p => p.status === 'In Stock');
+    // Shuffle the array to make it feel random
+    const shuffled = [...inStockOnly].sort(() => 0.5 - Math.random());
+    // Return up to 4
+    return shuffled.slice(0, 4);
+  }, [products]);
+
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>
       
-      {/* ----------------- MODAL OVERLAY ----------------- */}
+      {/* ----------------- BUY CONFIRMATION MODAL (NEW) ----------------- */}
+      {productToBuy && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className={`${theme.surface} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200 border ${theme.border}`}>
+            <h3 className={`text-xl font-bold ${theme.textPrimary} mb-1`}>Checkout</h3>
+            <p className={`text-sm ${theme.textSecondary} mb-4`}>You are purchasing <b>{productToBuy.name}</b></p>
+            
+            <div className="flex flex-col gap-2 mb-6">
+                <label className={`text-sm font-bold ${theme.textSecondary}`}>Quantity (Max: {productToBuy.rawStock})</label>
+                <div className="flex items-center gap-3">
+                     <input 
+                         type="number" 
+                         min="1" 
+                         max={productToBuy.rawStock}
+                         value={purchaseQuantity}
+                         onChange={(e) => setPurchaseQuantity(Number(e.target.value))}
+                         className={`flex-1 ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all font-medium text-lg`}
+                     />
+                </div>
+            </div>
+
+            <div className={`pt-4 border-t ${theme.border} flex justify-between items-center`}>
+                <div className="flex flex-col">
+                    <span className={`text-xs font-bold ${theme.textSecondary} uppercase tracking-wider`}>Total Price</span>
+                    <span className={`text-xl font-black ${theme.textPrimary}`}>
+                         ${(productToBuy.price * purchaseQuantity).toFixed(2)}
+                    </span>
+                </div>
+                <div className="flex gap-2">
+                    <button 
+                         onClick={() => setProductToBuy(null)}
+                         disabled={isPurchasing}
+                         className={`px-4 py-2.5 rounded-lg font-bold text-sm ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`}
+                    >
+                         Cancel
+                    </button>
+                    <button 
+                         onClick={handleConfirmPurchase}
+                         disabled={isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock}
+                         className={`px-6 py-2.5 rounded-lg font-bold text-sm text-white flex items-center gap-2 transition-all ${
+                            isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-green-700 hover:bg-green-800 shadow-md'
+                         }`}
+                    >
+                         {isPurchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                         Confirm Buy
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- PRODUCT DETAILS MODAL ----------------- */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className={`${theme.surface} rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200`}>
+            
+            {/* Left Side: Product Image Placeholder */}
+            <div className={`w-full md:w-1/2 min-h-75 flex flex-col items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} border-b md:border-b-0 md:border-r ${theme.border}`}>
+                {selectedProduct.imageUrl ? (
+                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                ) : (
+                  <>
+                    <ImageIcon className={`w-20 h-20 ${theme.textSecondary} opacity-20 mb-4`} />
+                    <span className={`text-sm font-medium ${theme.textSecondary}`}>No Image Available</span>
+                  </>
+                )}
+            </div>
+
+            {/* Right Side: Details */}
+            <div className="w-full md:w-1/2 p-6 flex flex-col relative">
+              <button 
+                onClick={() => setSelectedProduct(null)} 
+                className={`absolute top-4 right-4 p-1.5 rounded-full ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors outline-none`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex-1">
+                <div className="mb-2 flex items-center gap-2">
+                  <Tag className={`w-4 h-4 ${theme.textSecondary}`} />
+                  <span className={`text-xs font-bold uppercase tracking-wider text-green-600`}>{selectedProduct.category}</span>
+                </div>
+                <h2 className={`text-2xl font-bold ${theme.textPrimary} mb-2`}>{selectedProduct.name}</h2>
+                <div className={`text-3xl font-black ${theme.textPrimary} mb-6`}>${Number(selectedProduct.price).toFixed(2)}</div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className={`text-sm font-bold ${theme.textSecondary} mb-1`}>Status</h4>
+                    <span className={`text-sm font-bold px-3 py-1 rounded-full inline-block ${
+                        selectedProduct.status === 'In Stock' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-[#E5F0E6] text-[#2C3E2D]') : 
+                        selectedProduct.status === 'Low Stock' ? (isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700') :
+                        (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')
+                    }`}>
+                      {selectedProduct.stockText}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className={`text-sm font-bold ${theme.textSecondary} mb-1`}>Description</h4>
+                    <p className={`text-sm ${theme.textPrimary} leading-relaxed`}>
+                      {selectedProduct.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button 
+                  onClick={() => handleOpenBuyModal(selectedProduct)} /* Trigger buy modal */
+                  disabled={selectedProduct.status === 'Out of Stock'}
+                  className={`w-full py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all ${
+                    selectedProduct.status === 'Out of Stock' 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                    : 'bg-green-700 text-white hover:bg-green-800 shadow-md hover:shadow-lg'
+                  }`}
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  {selectedProduct.status === 'Out of Stock' ? 'Out of Stock' : 'Buy Now'}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- ADD NEW ITEM MODAL ----------------- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className={`${theme.surface} rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border ${theme.border}`}>
-            <div className={`p-5 border-b ${theme.border} flex justify-between items-center`}>
-              <h3 className={`font-bold ${theme.textPrimary}`}>Add New Marketplace Item</h3>
+          <div className={`${theme.surface} rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border ${theme.border} max-h-[90vh] flex flex-col`}>
+            <div className={`p-5 border-b ${theme.border} flex justify-between items-center bg-opacity-50`}>
+              <h3 className={`font-bold flex items-center gap-2 ${theme.textPrimary}`}>
+                <Plus className="w-5 h-5 text-green-600" />
+                Add New Marketplace Item
+              </h3>
               <button 
                 onClick={() => setIsModalOpen(false)} 
-                className={`p-1 rounded-md ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors outline-none`}
+                className={`p-1.5 rounded-md ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors outline-none`}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleAddNewItem} className="p-5 flex flex-col gap-4">
-              {/* Product Name */}
-              <div className="flex flex-col gap-1.5">
-                <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Name</label>
-                <input 
-                  required
-                  type="text" 
-                  value={newItemForm.name}
-                  onChange={e => setNewItemForm({...newItemForm, name: e.target.value})}
-                  className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
-                  placeholder="e.g. Organic Apple Juice"
-                />
-              </div>
-
-              {/* Category Dropdown */}
-              <div className="flex flex-col gap-1.5">
-                <label className={`text-sm font-bold ${theme.textSecondary}`}>Category</label>
-                <select 
-                  required
-                  value={newItemForm.category}
-                  onChange={e => setNewItemForm({...newItemForm, category: e.target.value})}
-                  className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Price */}
+            <div className="flex-1 overflow-y-auto">
+              <form id="add-product-form" onSubmit={handleAddNewItem} className="p-5 flex flex-col gap-4">
+                
+                {/* Photo Upload (Optional) */}
                 <div className="flex flex-col gap-1.5">
-                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Price ($)</label>
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Image (Optional)</label>
+                  <div className={`border-2 border-dashed ${theme.border} rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:${theme.surfaceHover} hover:border-green-500 transition-colors group`}>
+                    <ImageIcon className={`w-8 h-8 ${theme.textSecondary} group-hover:text-green-500 mb-2 transition-colors`} />
+                    <span className={`text-sm font-medium ${theme.textPrimary}`}>Click to upload image</span>
+                    <span className={`text-xs ${theme.textSecondary} mt-1`}>JPG, PNG or WEBP (Max 5MB)</span>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden" 
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setNewItemForm({...newItemForm, imageFile: e.target.files[0]});
+                        }
+                      }}
+                    />
+                  </div>
+                  {newItemForm.imageFile && (
+                    <div className="text-xs text-green-600 font-medium flex items-center gap-1 mt-1">
+                      <Check className="w-3 h-3" /> {newItemForm.imageFile.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Product Name */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Name <span className="text-red-500">*</span></label>
                   <input 
                     required
-                    type="number" 
-                    step="0.01"
-                    min="0"
-                    value={newItemForm.price}
-                    onChange={e => setNewItemForm({...newItemForm, price: e.target.value === '' ? '' : parseFloat(e.target.value)})}
-                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
+                    type="text" 
+                    value={newItemForm.name}
+                    onChange={e => setNewItemForm({...newItemForm, name: e.target.value})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                    placeholder="e.g. Organic Apple Juice"
                   />
                 </div>
 
-                {/* Stock Amount */}
+                {/* Category Dropdown */}
                 <div className="flex flex-col gap-1.5">
-                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Stock Amount</label>
-                  <input 
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Category <span className="text-red-500">*</span></label>
+                  <select 
                     required
-                    type="number" 
-                    min="0"
-                    value={newItemForm.stock}
-                    onChange={e => setNewItemForm({...newItemForm, stock: e.target.value === '' ? '' : parseInt(e.target.value)})}
-                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-700`}
+                    value={newItemForm.category}
+                    onChange={e => setNewItemForm({...newItemForm, category: e.target.value})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                  >
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Description (Optional) */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Description (Optional)</label>
+                  <textarea 
+                    rows={3}
+                    value={newItemForm.description}
+                    onChange={e => setNewItemForm({...newItemForm, description: e.target.value})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all resize-none`}
+                    placeholder="Provide details about the product..."
                   />
                 </div>
-              </div>
 
-              <div className={`mt-4 pt-4 border-t ${theme.border} flex justify-end gap-3`}>
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm ${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover} transition-colors`}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-6 py-2 rounded-lg font-medium text-sm text-white bg-green-800 hover:bg-green-900 transition-colors shadow-sm"
-                >
-                  Done
-                </button>
-              </div>
-            </form>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Price */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className={`text-sm font-bold ${theme.textSecondary}`}>Price ($) <span className="text-red-500">*</span></label>
+                    <input 
+                      required
+                      type="number" 
+                      step="0.01"
+                      min="0"
+                      value={newItemForm.price}
+                      onChange={e => setNewItemForm({...newItemForm, price: e.target.value === '' ? '' : parseFloat(e.target.value)})}
+                      className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                    />
+                  </div>
+
+                  {/* Stock Amount */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className={`text-sm font-bold ${theme.textSecondary}`}>Stock <span className="text-red-500">*</span></label>
+                    <input 
+                      required
+                      type="number" 
+                      min="0"
+                      value={newItemForm.stock}
+                      onChange={e => setNewItemForm({...newItemForm, stock: e.target.value === '' ? '' : parseInt(e.target.value)})}
+                      className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className={`p-4 border-t ${theme.border} bg-opacity-50 flex justify-end gap-3`}>
+              <button 
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className={`px-4 py-2.5 rounded-lg font-bold text-sm ${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover} transition-colors`}
+              >
+                Cancel
+              </button>
+              <button 
+                form="add-product-form"
+                type="submit"
+                className="px-6 py-2.5 rounded-lg font-bold text-sm text-white bg-green-700 hover:bg-green-800 transition-colors shadow-md flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Publish Product
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -332,7 +605,7 @@ export default function MarketplacePage() {
                 onClick={() => setIsModalOpen(true)}
                 className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors"
               >
-                <Plus className="w-5 h-5 flex-shrink-0" />
+                <Plus className="w-5 h-5 shrink-0" />
                 Add New Items
               </button>
             </div>
@@ -384,8 +657,22 @@ export default function MarketplacePage() {
 
           <h2 className={`text-lg font-bold ${theme.textPrimary} mb-4`}>Recommended for You</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-              <ProductCard id="1" name="Organic Fertilizer" price={24.99} stockCount={15} />
-              <ProductCard id="2" name="Premium Seeds" price={12.50} stockCount={0} />
+            {recommendedProducts.length > 0 ? (
+              recommendedProducts.map(product => (
+                <div key={product.id} onClick={() => setSelectedProduct(product)} className="cursor-pointer transition-transform hover:scale-105">
+                  <ProductCard 
+                    id={product.id} 
+                    name={product.name} 
+                    price={product.price} 
+                    stockCount={product.rawStock}
+                    // Since the current ProductCard might not have image props yet, 
+                    // we'll pass standard props, but you can adjust your ProductCard later
+                  />
+                </div>
+              ))
+            ) : (
+              <p className={`text-sm ${theme.textSecondary}`}>More products arriving soon...</p>
+            )}
           </div>
 
           {/* All Products List */}
@@ -419,11 +706,20 @@ export default function MarketplacePage() {
                   </tr>
                 ) : (
                   filteredProducts.map((product) => (
-                    <tr key={product.id} className={`group hover:${theme.surfaceHover} transition-colors`}>
-                      <td className="py-4"><input type="checkbox" className={`rounded text-green-700 ${theme.background} border-gray-400`} /></td>
+                    <tr 
+                      key={product.id} 
+                      onClick={() => setSelectedProduct(product)} 
+                      className={`group hover:${theme.surfaceHover} transition-colors cursor-pointer`}
+                    >
+                      <td className="py-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" className={`rounded text-green-700 ${theme.background} border-gray-400`} /></td>
                       <td className="py-4 flex items-center gap-3">
-                        <div className={`w-10 h-10 border ${theme.border} rounded ${theme.background} flex items-center justify-center font-bold ${theme.textSecondary}`}>
-                           {product.imageLetter}
+                        <div className={`w-10 h-10 border ${theme.border} rounded ${theme.background} flex items-center justify-center font-bold ${theme.textSecondary} shrink-0 relative overflow-hidden bg-gray-100 dark:bg-gray-800`}>
+                           {product.imageUrl ? (
+                             <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                           ) : (
+                             // The fallback letter if no image
+                             product.imageLetter
+                           )}
                         </div>
                         <span className={`font-bold ${theme.textPrimary}`}>{product.name}</span>
                       </td>
@@ -442,9 +738,18 @@ export default function MarketplacePage() {
                         </span>
                       </td>
                       <td className="py-4">
-                        <div className={`flex items-center justify-end gap-2 ${theme.textSecondary}`}>
-                          <button className={`p-1 hover:${theme.textPrimary} transition-colors`}><ShoppingCart className="w-4 h-4" /></button>
-                          <button className={`p-1 hover:${theme.textPrimary} transition-colors`}><MoreHorizontal className="w-4 h-4" /></button>
+                        <div className={`flex items-center justify-end gap-2 ${theme.textSecondary}`} onClick={(e) => e.stopPropagation()}>
+                          <button 
+                             onClick={() => handleOpenBuyModal(product)} /* Trigger detail from table */
+                             disabled={product.status === "Out of Stock"}
+                             className={`p-1.5 rounded-md transition-colors ${
+                               product.status === "Out of Stock" 
+                               ? 'opacity-50 cursor-not-allowed'
+                               : 'hover:bg-green-600 hover:text-white'
+                             }`}
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
