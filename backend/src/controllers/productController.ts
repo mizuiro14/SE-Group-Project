@@ -13,13 +13,14 @@ const parseStringOrUndefined = (param: any): string | undefined => {
 
 export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { category_id, search, limit, offset } = req.query;
+        const { category_id, search, limit, offset, seller_id } = req.query;
 
         const filters = {
             category_id: category_id ? parseInt(parseStringOrUndefined(category_id) || '0') : undefined,
             search: parseStringOrUndefined(search),
             limit: limit ? parseInt(parseStringOrUndefined(limit) || '20') || 20 : 20,
             offset: offset ? parseInt(parseStringOrUndefined(offset) || '0') || 0 : 0,
+            seller_id: parseStringOrUndefined(seller_id),
         };
 
         const products = await productService.getAllProducts(filters);
@@ -45,10 +46,10 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, description, price, quantity, category_id, sku } = req.body;
+        const { name, description, price, quantity, category_id, sku, seller_id } = req.body;
 
-        if (!name || price === undefined || quantity === undefined) {
-            res.status(400).json({ error: 'Name, price, and quantity are required' });
+        if (!name || price === undefined || quantity === undefined || !seller_id) {
+            res.status(400).json({ error: 'Name, price, quantity, and seller_id are required' });
             return;
         }
 
@@ -58,6 +59,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
         }
 
         const product = await productService.createProduct({
+            seller_id,
             name,
             description: description || null,
             price,

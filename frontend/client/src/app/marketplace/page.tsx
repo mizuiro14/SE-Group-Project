@@ -69,7 +69,7 @@ class CategoryFilter extends FilterDecorator {
 // ==========================================
 export default function MarketplacePage() {
   const { theme, isDarkMode } = useTheme();
-  const { isSeller } = useAuth(); 
+  const { isSeller, user } = useAuth(); 
 
   // --- STATE ---
   const [products, setProducts] = useState<Product[]>([]);
@@ -180,6 +180,7 @@ export default function MarketplacePage() {
            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          seller_id: user?.id,
           name: newItemForm.name,
           price: priceNum,
           quantity: stockNum,
@@ -316,7 +317,7 @@ export default function MarketplacePage() {
       
       {/* ----------------- BUY CONFIRMATION MODAL (NEW) ----------------- */}
       {productToBuy && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className={`${theme.surface} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200 border ${theme.border}`}>
             <h3 className={`text-xl font-bold ${theme.textPrimary} mb-1`}>Checkout</h3>
             <p className={`text-sm ${theme.textSecondary} mb-4`}>You are purchasing <b>{productToBuy.name}</b></p>
@@ -374,7 +375,7 @@ export default function MarketplacePage() {
           <div className={`${theme.surface} rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200`}>
             
             {/* Left Side: Product Image Placeholder */}
-            <div className={`w-full md:w-1/2 min-h-[300px] flex flex-col items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} border-b md:border-b-0 md:border-r ${theme.border}`}>
+            <div className={`w-full md:w-1/2 min-h-75 flex flex-col items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} border-b md:border-b-0 md:border-r ${theme.border}`}>
                 {selectedProduct.imageUrl ? (
                   <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
                 ) : (
@@ -604,7 +605,7 @@ export default function MarketplacePage() {
                 onClick={() => setIsModalOpen(true)}
                 className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors"
               >
-                <Plus className="w-5 h-5 flex-shrink-0" />
+                <Plus className="w-5 h-5 shrink-0" />
                 Add New Items
               </button>
             </div>
@@ -712,7 +713,7 @@ export default function MarketplacePage() {
                     >
                       <td className="py-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" className={`rounded text-green-700 ${theme.background} border-gray-400`} /></td>
                       <td className="py-4 flex items-center gap-3">
-                        <div className={`w-10 h-10 border ${theme.border} rounded ${theme.background} flex items-center justify-center font-bold ${theme.textSecondary} flex-shrink-0 relative overflow-hidden bg-gray-100 dark:bg-gray-800`}>
+                        <div className={`w-10 h-10 border ${theme.border} rounded ${theme.background} flex items-center justify-center font-bold ${theme.textSecondary} shrink-0 relative overflow-hidden bg-gray-100 dark:bg-gray-800`}>
                            {product.imageUrl ? (
                              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                            ) : (
