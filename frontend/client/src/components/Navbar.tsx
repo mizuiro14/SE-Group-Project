@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Button } from './ui/Button';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -45,18 +46,22 @@ export default function Navbar() {
           
           {/* Public Auth Buttons */}
           <div className="flex items-center gap-4">
-            <Link 
-              href="/login" 
-              className="px-6 py-2 text-sm font-bold text-white border-2 border-white rounded-full hover:bg-white hover:text-gray-900 transition-all shadow-sm"
-            >
-              Log in
+            <Link href="/login">
+              <Button 
+                variant="outline"
+                className="rounded-full px-6 font-bold shadow-sm border-white text-white hover:bg-white hover:text-gray-900 transition-all"
+              >
+                Log in
+              </Button>
             </Link>
             
-            <Link 
-              href="/signup" 
-              className="px-6 py-2 text-sm font-bold text-white border-2 border-white rounded-full hover:bg-white hover:text-gray-900 transition-all shadow-sm"
-            >
-              Sign Up
+            <Link href="/signup">
+              <Button 
+                variant="outline"
+                className="rounded-full px-6 font-bold shadow-sm border-white text-white hover:bg-white hover:text-gray-900 transition-all"
+              >
+                Sign Up
+              </Button>
             </Link>
           </div>
         </div>

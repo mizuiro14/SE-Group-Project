@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import { useTheme } from '@/theme/ThemeContext';
 import { Search, Bell, ShoppingCart, Star, TrendingUp, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
+import { ProductCard } from '@/components/ProductCard';
 
 const MOCK_PRODUCTS = [
   {
@@ -240,73 +241,19 @@ export default function BestSellersPage() {
           {/* Spotlight Comparison Section */}
           <div>
             <h2 className={`text-xl font-bold mb-6 ${theme.textPrimary}`}>Spotlight Comparison</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Product 1 Card */}
-              <div className={`${theme.surface} rounded-xl border ${theme.border} p-6 relative transition-colors duration-300 shadow-sm`}>
-                <div className={`absolute top-4 right-4 ${isDarkMode ? 'bg-green-800' : 'bg-[#8EAD45]'} text-white text-xs font-bold px-3 py-1 rounded uppercase tracking-wider`}>
-                  Top Pick
-                </div>
-                <div className="flex flex-col md:flex-row gap-6 items-center">
-                  <div className={`w-32 h-32 ${theme.background} flex items-center justify-center rounded-lg border ${theme.border}`}>
-                    <span className="text-4xl">🍯</span>
-                  </div>
-                  <div className="flex-1 w-full">
-                    <h3 className={`text-lg font-bold ${theme.textPrimary} mb-1`}>{topPick.name}</h3>
-                    <p className={`text-sm ${theme.textSecondary} mb-4 line-clamp-2`}>Premium unpasteurized honey sourced locally.</p>
-                    
-                    <div className="space-y-2 text-sm">
-                      <div className={`flex justify-between border-b ${theme.border} pb-1`}>
-                        <span className={theme.textSecondary}>Price</span>
-                        <span className={`font-semibold ${theme.textPrimary}`}>${topPick.price.toFixed(2)}</span>
-                      </div>
-                      <div className={`flex justify-between border-b ${theme.border} pb-1`}>
-                        <span className={theme.textSecondary}>Rating</span>
-                        <span className={`font-semibold ${theme.textPrimary} flex items-center`}><Star className="w-3 h-3 text-red-500 fill-red-500 mr-1"/>{topPick.rating}</span>
-                      </div>
-                      <div className="flex justify-between pb-1">
-                        <span className={theme.textSecondary}>Origin</span>
-                        <span className={`font-semibold ${theme.textPrimary}`}>Local Farm</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <button className={`w-full mt-6 py-2.5 border ${theme.border} rounded font-semibold ${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover} transition-colors`}>
-                  View Details
-                </button>
-              </div>
-
-              {/* Product 2 Card */}
-              <div className={`${theme.surface} rounded-xl border ${theme.border} p-6 transition-colors duration-300 shadow-sm`}>
-                <div className="flex flex-col md:flex-row gap-6 items-center">
-                  <div className={`w-32 h-32 ${theme.background} flex items-center justify-center rounded-lg border ${theme.border}`}>
-                    <span className="text-4xl">☕</span>
-                  </div>
-                  <div className="flex-1 w-full">
-                    <h3 className={`text-lg font-bold ${theme.textPrimary} mb-1`}>{runnerUp.name}</h3>
-                    <p className={`text-sm ${theme.textSecondary} mb-4 line-clamp-2`}>Rich, bold flavor profile for the perfect morning.</p>
-                    
-                    <div className="space-y-2 text-sm">
-                      <div className={`flex justify-between border-b ${theme.border} pb-1`}>
-                        <span className={theme.textSecondary}>Price</span>
-                        <span className={`font-semibold ${theme.textPrimary}`}>${runnerUp.price.toFixed(2)}</span>
-                      </div>
-                      <div className={`flex justify-between border-b ${theme.border} pb-1`}>
-                        <span className={theme.textSecondary}>Rating</span>
-                        <span className={`font-semibold ${theme.textPrimary} flex items-center`}><Star className="w-3 h-3 text-red-500 fill-red-500 mr-1"/>{runnerUp.rating}</span>
-                      </div>
-                      <div className="flex justify-between pb-1">
-                        <span className={theme.textSecondary}>Origin</span>
-                        <span className={`font-semibold ${theme.textPrimary}`}>Colombia</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <button className={`w-full mt-6 py-2.5 border ${theme.border} rounded font-semibold ${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover} transition-colors`}>
-                  View Details
-                </button>
-              </div>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+              <ProductCard 
+                id="1" 
+                name="Red Wildflower Honey" 
+                price={14.00} 
+                stockCount={15} 
+              />
+              <ProductCard 
+                id="2" 
+                name="Dark Roast Coffee Beans" 
+                price={18.50} 
+                stockCount={0} 
+              />
             </div>
           </div>
 

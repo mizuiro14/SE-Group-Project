@@ -1,12 +1,14 @@
-import { supabase } from '../SupabaseClient';
+import { supabase, supabaseAdmin } from '../SupabaseClient';
 
 export interface Product {
     id: number;
+    seller_id: string;
     name: string;
     description: string | null;
     price: number;
     quantity: number;
     category_id: number | null;
+    category: string | null;
     sku: string | null;
     created_at: string;
     updated_at: string;
@@ -17,8 +19,9 @@ export const getAllProducts = async (filters?: {
     search?: string;
     limit?: number;
     offset?: number;
+    seller_id?: string;
 }): Promise<Product[]> => {
-    let query = supabase.from('products').select('*');
+    let query = supabase.from('products').select('*, categories(name)');
 
     if (filters?.category_id) {
         query = query.eq('category_id', filters.category_id);
@@ -26,6 +29,10 @@ export const getAllProducts = async (filters?: {
 
     if (filters?.search) {
         query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%,sku.ilike.%${filters.search}%`);
+    }
+
+    if (filters?.seller_id) {
+        query = query.eq('seller_id', filters.seller_id);
     }
 
     if (filters?.limit) {
@@ -36,11 +43,14 @@ export const getAllProducts = async (filters?: {
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((item: any) => ({
+        ...item,
+        category: item.categories?.name || null
+    }));
 };
 
 export const getProductById = async (id: number): Promise<Product> => {
-    const { data, error } = await supabase
+    const { data, error } = await supabase            
         .from('products')
         .select('*')
         .eq('id', id)
@@ -51,10 +61,11 @@ export const getProductById = async (id: number): Promise<Product> => {
     return data;
 };
 
-export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> => {
+export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'category'>): Promise<Product> => {
     const { data, error } = await supabase
         .from('products')
         .insert([{
+            seller_id: product.seller_id,
             name: product.name,
             description: product.description,
             price: product.price,
@@ -130,7 +141,8 @@ export const searchProducts = async (query: string): Promise<Product[]> => {
 };
 
 export const updateProductQuantity = async (id: number, quantity: number): Promise<Product> => {
-    const { data, error } = await supabase
+    // CHANGE THIS from supabase.from(...) to supabaseAdmin.from(...)
+    const { data, error } = await supabaseAdmin
         .from('products')
         .update({
             quantity,
@@ -144,7 +156,6 @@ export const updateProductQuantity = async (id: number, quantity: number): Promi
     if (!data) throw new Error('Product not found');
     return data;
 };
-
 export default {
     getAllProducts,
     getProductById,

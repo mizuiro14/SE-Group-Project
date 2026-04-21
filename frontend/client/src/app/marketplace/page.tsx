@@ -2,11 +2,14 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
+import DashboardHeader from '@/components/DashboardHeader';
 import { useTheme } from '@/theme/ThemeContext';
 import { 
-  Search, Bell, ShoppingCart, ChevronDown, Filter, 
-  Bookmark, RotateCcw, Plus, MoreHorizontal, Truck, Check
+  ChevronDown, Filter, Bookmark, RotateCcw, 
+  MoreHorizontal, Truck, Check, ShoppingCart, Plus, X, Image as ImageIcon, Tag, Loader2
 } from 'lucide-react';
+import { ProductCard } from '@/components/ProductCard';
+import { useAuth } from '@/context/AuthContext';
 
 // ==========================================
 // 1. TYPES & MOCK DATA
@@ -19,15 +22,11 @@ export interface Product {
   price: number;
   status: 'In Stock' | 'Low Stock' | 'Out of Stock';
   imageLetter: string;
+  description?: string;
+  imageUrl?: string;
+  // keep raw stock available for product card check
+  rawStock: number; 
 }
-
-const MOCK_PRODUCTS: Product[] = [
-  { id: '1', name: 'Daily Essential Vitamins', category: 'Vitamins', stockText: '120 in stock', price: 24.50, status: 'In Stock', imageLetter: 'V' },
-  { id: '2', name: 'Green Superfood Juice', category: 'Juice', stockText: '45 in stock', price: 12.00, status: 'In Stock', imageLetter: 'J' },
-  { id: '3', name: 'Organic Barley Powder', category: 'Powder', stockText: '5 Low Stock', price: 34.00, status: 'Low Stock', imageLetter: 'P' },
-  { id: '4', name: 'Barley Grass Capsules', category: 'Pills', stockText: '82 in stock', price: 18.00, status: 'In Stock', imageLetter: 'P' },
-  { id: '5', name: 'Kids Barley Gummies', category: 'Gummy', stockText: '0 in stock', price: 15.50, status: 'Out of Stock', imageLetter: 'G' },
-];
 
 const CATEGORIES = ['Vitamins', 'Juice', 'Powder', 'Pills', 'Gummy'];
 
@@ -38,38 +37,29 @@ interface ProductFilter {
   filter(products: Product[]): Product[];
 }
 
-// Base Component: Returns all products
 class BaseFilter implements ProductFilter {
   filter(products: Product[]): Product[] {
     return products;
   }
 }
 
-// Abstract Decorator
 abstract class FilterDecorator implements ProductFilter {
   protected filterComponent: ProductFilter;
-  
   constructor(filterComponent: ProductFilter) {
     this.filterComponent = filterComponent;
   }
-  
   abstract filter(products: Product[]): Product[];
 }
 
-// Concrete Decorator: Filters by matching ANY of the selected categories
 class CategoryFilter extends FilterDecorator {
   private selectedCategories: string[];
-  
   constructor(filterComponent: ProductFilter, selectedCategories: string[]) {
     super(filterComponent);
     this.selectedCategories = selectedCategories;
   }
-  
   filter(products: Product[]): Product[] {
     const previousFiltered = this.filterComponent.filter(products);
-    // If no categories are selected, return all
     if (this.selectedCategories.length === 0) return previousFiltered;
-    // Otherwise, check if the product's category is in the selected list
     return previousFiltered.filter(p => this.selectedCategories.includes(p.category));
   }
 }
@@ -78,14 +68,77 @@ class CategoryFilter extends FilterDecorator {
 // 3. MAIN COMPONENT
 // ==========================================
 export default function MarketplacePage() {
+  const { theme, isDarkMode } = useTheme();
+  const { isSeller, user } = useAuth(); 
+
+  // --- STATE ---
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  
+  // --- ADD ITEM MODAL STATE ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newItemForm, setNewItemForm] = useState<{
+    name: string;
+    category: string;
+    stock: number | '';
+    price: number | '';
+    description: string;
+    imageFile: File | null;
+  }>({
+    name: '',
+    category: CATEGORIES[0], 
+    stock: '', 
+    price: '',
+    description: '',
+    imageFile: null
+  });
 
-  // Bring in the global theme
-  const { theme, isDarkMode } = useTheme();
+  // --- PRODUCT DETAILS MODAL STATE ---
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Close custom dropdown when clicking outside
+  // --- BUY PRODUCT MODAL STATE ---
+  const [productToBuy, setProductToBuy] = useState<Product | null>(null);
+  const [purchaseQuantity, setPurchaseQuantity] = useState<number>(1);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  // Fetch Global Products on Mount
+  useEffect(() => {
+    const fetchGlobalProducts = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/products'); 
+        const dbProducts = await response.json();
+        
+        const mappedProducts: Product[] = dbProducts.map((p: any) => {
+          let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+          if (p.quantity > 30) computedStatus = 'In Stock';
+          else if (p.quantity > 0) computedStatus = 'Low Stock';
+
+          return {
+            id: String(p.id),
+            name: p.name,
+            category: p.category || 'Uncategorized',
+            stockText: `${p.quantity} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
+            price: p.price,
+            status: computedStatus,
+            imageLetter: p.name.charAt(0).toUpperCase() || 'P',
+            description: p.description || 'No description available for this product.',
+            imageUrl: p.image_url || undefined, // Placeholder for database column
+            rawStock: p.quantity || 0,
+          };
+        });
+
+        setProducts(mappedProducts);
+      } catch (error) {
+        console.error('Failed to fetch marketplace items', error);
+      }
+    };
+
+    fetchGlobalProducts();
+  }, []);
+
+  // Close custom drop downs when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
@@ -104,7 +157,142 @@ export default function MarketplacePage() {
     );
   };
 
-  // Apply the decorator pattern filtering
+  // Add Item Logic
+  const handleAddNewItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const stockNum = Number(newItemForm.stock) || 0;
+    const priceNum = Number(newItemForm.price) || 0;
+
+    try {
+      // POST the real data to your API to save it for everyone
+      const categoryMap: Record<string, number> = {
+        'Vitamins': 1,
+        'Juice': 2,
+        'Powder': 3,
+        'Pills': 4,
+        'Gummy': 5
+      };
+      const categoryId = categoryMap[newItemForm.category] || null;
+      const response = await fetch('http://localhost:5000/api/products', {
+        method: 'POST',
+        headers: {
+           'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          seller_id: user?.id,
+          name: newItemForm.name,
+          price: priceNum,
+          quantity: stockNum,
+          category_id: categoryId,
+          description: newItemForm.description || `Added by Seller from Marketplace Page`
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Server returned an error');
+      }
+
+      const savedDbProduct = await response.json();
+
+      let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+      if (stockNum > 30) computedStatus = 'In Stock';
+      else if (stockNum > 0) computedStatus = 'Low Stock';
+
+      // Build the product card format 
+      const newProduct: Product = {
+        id: String(savedDbProduct.id), 
+        name: savedDbProduct.name,
+        category: newItemForm.category,
+        price: savedDbProduct.price,
+        stockText: `${stockNum} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
+        status: computedStatus,
+        imageLetter: savedDbProduct.name.charAt(0).toUpperCase() || 'P',
+        description: savedDbProduct.description,
+        rawStock: stockNum
+      };
+
+      // Put it in our local state instantly for a snappy UI
+      setProducts(prev => [newProduct, ...prev]);
+
+      // Cleanup and close
+      setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '', description: '', imageFile: null });
+      setIsModalOpen(false);
+
+    } catch (err) {
+       console.error("Failed to list item globally", err);
+    }
+  };
+
+  // Open Buy Modal
+  const handleOpenBuyModal = (product: Product) => {
+    setProductToBuy(product);
+    setPurchaseQuantity(1); // Default to buying 1
+  };
+
+  // Process the Purchase and Decrement Stock
+  const handleConfirmPurchase = async () => {
+    if (!productToBuy) return;
+    
+    if (purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock) {
+        alert("Please enter a valid quantity.");
+        return;
+    }
+
+    setIsPurchasing(true);
+
+    try {
+        const remainingStock = productToBuy.rawStock - purchaseQuantity;
+
+        // Call our backend to deduct the stock
+        const response = await fetch(`http://localhost:5000/api/products/${productToBuy.id}/quantity`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ quantity: remainingStock })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to complete purchase');
+        }
+
+        // Recompute the status based on the remaining stock
+        let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+        if (remainingStock > 30) computedStatus = 'In Stock';
+        else if (remainingStock > 0) computedStatus = 'Low Stock';
+
+        // Visually update the product in our list without a full page refresh
+        setProducts(prevProducts => prevProducts.map(p => {
+             if (p.id === productToBuy.id) {
+                 return {
+                     ...p,
+                     rawStock: remainingStock,
+                     status: computedStatus,
+                     stockText: `${remainingStock} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`
+                 }
+             }
+             return p;
+        }));
+        
+        // Let the user know they succeeded
+        alert(`Successfully purchased ${purchaseQuantity} of ${productToBuy.name}!`);
+
+        // Clean up both modals
+        setProductToBuy(null);
+        setSelectedProduct(null);
+        
+    } catch (err: any) {
+        console.error(err);
+        alert(err.message || 'An error occurred during purchase.');
+    } finally {
+        setIsPurchasing(false);
+    }
+  };
+
+  // Apply the decorator pattern filtering using our state variables
   const filteredProducts = useMemo(() => {
     let productFilter: ProductFilter = new BaseFilter();
     
@@ -112,66 +300,316 @@ export default function MarketplacePage() {
       productFilter = new CategoryFilter(productFilter, selectedCategories);
     }
     
-    return productFilter.filter(MOCK_PRODUCTS);
-  }, [selectedCategories]);
+    return productFilter.filter(products); 
+  }, [selectedCategories, products]);
+
+  // Recommended Products: Grab 4 random products that are strictly "In Stock"
+  const recommendedProducts = useMemo(() => {
+    const inStockOnly = products.filter(p => p.status === 'In Stock');
+    // Shuffle the array to make it feel random
+    const shuffled = [...inStockOnly].sort(() => 0.5 - Math.random());
+    // Return up to 4
+    return shuffled.slice(0, 4);
+  }, [products]);
 
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>
       
+      {/* ----------------- BUY CONFIRMATION MODAL (NEW) ----------------- */}
+      {productToBuy && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className={`${theme.surface} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200 border ${theme.border}`}>
+            <h3 className={`text-xl font-bold ${theme.textPrimary} mb-1`}>Checkout</h3>
+            <p className={`text-sm ${theme.textSecondary} mb-4`}>You are purchasing <b>{productToBuy.name}</b></p>
+            
+            <div className="flex flex-col gap-2 mb-6">
+                <label className={`text-sm font-bold ${theme.textSecondary}`}>Quantity (Max: {productToBuy.rawStock})</label>
+                <div className="flex items-center gap-3">
+                     <input 
+                         type="number" 
+                         min="1" 
+                         max={productToBuy.rawStock}
+                         value={purchaseQuantity}
+                         onChange={(e) => setPurchaseQuantity(Number(e.target.value))}
+                         className={`flex-1 ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all font-medium text-lg`}
+                     />
+                </div>
+            </div>
+
+            <div className={`pt-4 border-t ${theme.border} flex justify-between items-center`}>
+                <div className="flex flex-col">
+                    <span className={`text-xs font-bold ${theme.textSecondary} uppercase tracking-wider`}>Total Price</span>
+                    <span className={`text-xl font-black ${theme.textPrimary}`}>
+                         ${(productToBuy.price * purchaseQuantity).toFixed(2)}
+                    </span>
+                </div>
+                <div className="flex gap-2">
+                    <button 
+                         onClick={() => setProductToBuy(null)}
+                         disabled={isPurchasing}
+                         className={`px-4 py-2.5 rounded-lg font-bold text-sm ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`}
+                    >
+                         Cancel
+                    </button>
+                    <button 
+                         onClick={handleConfirmPurchase}
+                         disabled={isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock}
+                         className={`px-6 py-2.5 rounded-lg font-bold text-sm text-white flex items-center gap-2 transition-all ${
+                            isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-green-700 hover:bg-green-800 shadow-md'
+                         }`}
+                    >
+                         {isPurchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                         Confirm Buy
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- PRODUCT DETAILS MODAL ----------------- */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className={`${theme.surface} rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200`}>
+            
+            {/* Left Side: Product Image Placeholder */}
+            <div className={`w-full md:w-1/2 min-h-75 flex flex-col items-center justify-center ${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} border-b md:border-b-0 md:border-r ${theme.border}`}>
+                {selectedProduct.imageUrl ? (
+                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                ) : (
+                  <>
+                    <ImageIcon className={`w-20 h-20 ${theme.textSecondary} opacity-20 mb-4`} />
+                    <span className={`text-sm font-medium ${theme.textSecondary}`}>No Image Available</span>
+                  </>
+                )}
+            </div>
+
+            {/* Right Side: Details */}
+            <div className="w-full md:w-1/2 p-6 flex flex-col relative">
+              <button 
+                onClick={() => setSelectedProduct(null)} 
+                className={`absolute top-4 right-4 p-1.5 rounded-full ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors outline-none`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex-1">
+                <div className="mb-2 flex items-center gap-2">
+                  <Tag className={`w-4 h-4 ${theme.textSecondary}`} />
+                  <span className={`text-xs font-bold uppercase tracking-wider text-green-600`}>{selectedProduct.category}</span>
+                </div>
+                <h2 className={`text-2xl font-bold ${theme.textPrimary} mb-2`}>{selectedProduct.name}</h2>
+                <div className={`text-3xl font-black ${theme.textPrimary} mb-6`}>${Number(selectedProduct.price).toFixed(2)}</div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className={`text-sm font-bold ${theme.textSecondary} mb-1`}>Status</h4>
+                    <span className={`text-sm font-bold px-3 py-1 rounded-full inline-block ${
+                        selectedProduct.status === 'In Stock' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-[#E5F0E6] text-[#2C3E2D]') : 
+                        selectedProduct.status === 'Low Stock' ? (isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700') :
+                        (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')
+                    }`}>
+                      {selectedProduct.stockText}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className={`text-sm font-bold ${theme.textSecondary} mb-1`}>Description</h4>
+                    <p className={`text-sm ${theme.textPrimary} leading-relaxed`}>
+                      {selectedProduct.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button 
+                  onClick={() => handleOpenBuyModal(selectedProduct)} /* Trigger buy modal */
+                  disabled={selectedProduct.status === 'Out of Stock'}
+                  className={`w-full py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all ${
+                    selectedProduct.status === 'Out of Stock' 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                    : 'bg-green-700 text-white hover:bg-green-800 shadow-md hover:shadow-lg'
+                  }`}
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  {selectedProduct.status === 'Out of Stock' ? 'Out of Stock' : 'Buy Now'}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- ADD NEW ITEM MODAL ----------------- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`${theme.surface} rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border ${theme.border} max-h-[90vh] flex flex-col`}>
+            <div className={`p-5 border-b ${theme.border} flex justify-between items-center bg-opacity-50`}>
+              <h3 className={`font-bold flex items-center gap-2 ${theme.textPrimary}`}>
+                <Plus className="w-5 h-5 text-green-600" />
+                Add New Marketplace Item
+              </h3>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className={`p-1.5 rounded-md ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors outline-none`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              <form id="add-product-form" onSubmit={handleAddNewItem} className="p-5 flex flex-col gap-4">
+                
+                {/* Photo Upload (Optional) */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Image (Optional)</label>
+                  <div className={`border-2 border-dashed ${theme.border} rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:${theme.surfaceHover} hover:border-green-500 transition-colors group`}>
+                    <ImageIcon className={`w-8 h-8 ${theme.textSecondary} group-hover:text-green-500 mb-2 transition-colors`} />
+                    <span className={`text-sm font-medium ${theme.textPrimary}`}>Click to upload image</span>
+                    <span className={`text-xs ${theme.textSecondary} mt-1`}>JPG, PNG or WEBP (Max 5MB)</span>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden" 
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setNewItemForm({...newItemForm, imageFile: e.target.files[0]});
+                        }
+                      }}
+                    />
+                  </div>
+                  {newItemForm.imageFile && (
+                    <div className="text-xs text-green-600 font-medium flex items-center gap-1 mt-1">
+                      <Check className="w-3 h-3" /> {newItemForm.imageFile.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Product Name */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Name <span className="text-red-500">*</span></label>
+                  <input 
+                    required
+                    type="text" 
+                    value={newItemForm.name}
+                    onChange={e => setNewItemForm({...newItemForm, name: e.target.value})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                    placeholder="e.g. Organic Apple Juice"
+                  />
+                </div>
+
+                {/* Category Dropdown */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Category <span className="text-red-500">*</span></label>
+                  <select 
+                    required
+                    value={newItemForm.category}
+                    onChange={e => setNewItemForm({...newItemForm, category: e.target.value})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                  >
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Description (Optional) */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-sm font-bold ${theme.textSecondary}`}>Description (Optional)</label>
+                  <textarea 
+                    rows={3}
+                    value={newItemForm.description}
+                    onChange={e => setNewItemForm({...newItemForm, description: e.target.value})}
+                    className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all resize-none`}
+                    placeholder="Provide details about the product..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Price */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className={`text-sm font-bold ${theme.textSecondary}`}>Price ($) <span className="text-red-500">*</span></label>
+                    <input 
+                      required
+                      type="number" 
+                      step="0.01"
+                      min="0"
+                      value={newItemForm.price}
+                      onChange={e => setNewItemForm({...newItemForm, price: e.target.value === '' ? '' : parseFloat(e.target.value)})}
+                      className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                    />
+                  </div>
+
+                  {/* Stock Amount */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className={`text-sm font-bold ${theme.textSecondary}`}>Stock <span className="text-red-500">*</span></label>
+                    <input 
+                      required
+                      type="number" 
+                      min="0"
+                      value={newItemForm.stock}
+                      onChange={e => setNewItemForm({...newItemForm, stock: e.target.value === '' ? '' : parseInt(e.target.value)})}
+                      className={`w-full ${theme.background} border ${theme.border} rounded-lg p-2.5 ${theme.textPrimary} outline-none focus:ring-2 focus:ring-green-600 transition-all`}
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className={`p-4 border-t ${theme.border} bg-opacity-50 flex justify-end gap-3`}>
+              <button 
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className={`px-4 py-2.5 rounded-lg font-bold text-sm ${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover} transition-colors`}
+              >
+                Cancel
+              </button>
+              <button 
+                form="add-product-form"
+                type="submit"
+                className="px-6 py-2.5 rounded-lg font-bold text-sm text-white bg-green-700 hover:bg-green-800 transition-colors shadow-md flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Publish Product
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+      {/* ----------------------------------------------- */}
+
       <Sidebar />
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-hidden">
         
         {/* TOP NAVBAR */}
-        <header className={`h-16 ${theme.surface} border-b ${theme.border} flex items-center justify-between px-6 shrink-0 shadow-sm transition-colors duration-300`}>
-          <div className="flex-1 max-w-2xl relative">
-            <Search className={`w-4 h-4 ${theme.textSecondary} absolute left-3 top-1/2 -translate-y-1/2`} />
-            <input 
-              type="text" 
-              placeholder="Search marketplace products..." 
-              className={`w-full ${theme.background} border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-green-700 outline-none ${theme.textPrimary} placeholder-gray-400 transition-colors duration-300`}
-            />
-          </div>
-          <div className="flex items-center gap-4 ml-4">
-            <button className={`relative p-2 ${theme.textSecondary} hover:${theme.textPrimary} transition-colors`}>
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-2 w-2 h-2 bg-red-500 border border-white rounded-full"></span>
-            </button>
-            <button className={`relative p-2 ${theme.background} rounded-full ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`}>
-              <ShoppingCart className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 bg-green-800 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
-                3
-              </span>
-            </button>
-          </div>
-        </header>
+        <DashboardHeader searchPlaceholder="Search marketplace products..." />
 
         {/* CONTENT */}
         <div className="flex-1 overflow-auto p-8">
           
-          {/* Top Banner Card */}
-          <div className={`${theme.surface} rounded-2xl p-4 mb-8 flex items-center justify-between shadow-sm border ${theme.border} transition-colors duration-300`}>
-            <div className="flex items-center gap-4">
-              <div className={`w-10 h-10 ${isDarkMode ? 'bg-green-900/30' : 'bg-[#E5F0E6]'} rounded-full flex items-center justify-center`}>
-                <Truck className="w-5 h-5 text-green-600" />
-              </div>
+          {/* Top Banner Card (ONLY SHOWS FOR SELLERS) */}
+          {isSeller && (
+            <div className={`${theme.surface} rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm border ${theme.border} transition-colors duration-300 gap-4`}>
               <div>
-                <h3 className={`font-semibold ${theme.textPrimary}`}>Next Delivery Arriving</h3>
-                <p className={`text-sm ${theme.textSecondary}`}>Today between 2:00 PM - 4:00 PM</p>
+                <h3 className={`font-semibold ${theme.textPrimary} text-lg`}>Manage Your Products</h3>
+                <p className={`text-sm ${theme.textSecondary}`}>Add new items to the marketplace from your inventory.</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className={`px-4 py-2 border ${theme.border} rounded-lg text-sm font-medium ${theme.textPrimary} bg-transparent hover:${theme.surfaceHover} shadow-sm flex items-center gap-2 transition-colors`}>
-                <Bookmark className={`w-4 h-4 ${theme.textSecondary}`} />
-                Saved
-              </button>
-              <button className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors">
-                <RotateCcw className="w-4 h-4" />
-                Reorder
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-green-800 hover:bg-green-900 shadow-sm flex items-center gap-2 transition-colors"
+              >
+                <Plus className="w-5 h-5 shrink-0" />
+                Add New Items
               </button>
             </div>
-          </div>
+          )}
 
           {/* Marketplace Header */}
           <div className="flex flex-col lg:flex-row items-start lg:items-end justify-between mb-6 gap-4">
@@ -179,13 +617,8 @@ export default function MarketplacePage() {
               <h1 className={`text-3xl font-bold tracking-tight ${theme.textPrimary} mb-2`}>Member Marketplace</h1>
               <p className={`text-sm ${theme.textSecondary} font-medium`}>Exclusive deals and fresh arrivals for you.</p>
             </div>
+            {/* Filter Dropdown Area */}
             <div className="flex flex-wrap items-center gap-2">
-              <button className="px-4 py-1.5 bg-green-800 text-white rounded-full text-sm font-medium shadow-sm transition-colors">All</button>
-              <button className={`px-4 py-1.5 ${theme.surface} ${theme.textPrimary} rounded-full text-sm font-medium hover:${theme.surfaceHover} shadow-sm border ${theme.border} transition-colors`}>Organic</button>
-              <button className={`px-4 py-1.5 ${theme.surface} ${theme.textPrimary} rounded-full text-sm font-medium hover:${theme.surfaceHover} shadow-sm border ${theme.border} transition-colors`}>Pantry</button>
-              <button className={`px-4 py-1.5 ${theme.surface} ${theme.textPrimary} rounded-full text-sm font-medium hover:${theme.surfaceHover} shadow-sm border ${theme.border} transition-colors`}>Snacks</button>
-              
-              {/* Custom Multi-Select Dropdown Component */}
               <div className="relative ml-2" ref={filterRef}>
                 <button 
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -222,42 +655,24 @@ export default function MarketplacePage() {
             </div>
           </div>
 
-          {/* Recommended Cards */}
           <h2 className={`text-lg font-bold ${theme.textPrimary} mb-4`}>Recommended for You</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            {/* Card 1 */}
-            <div className={`${theme.surface} rounded-2xl p-4 shadow-sm relative group cursor-pointer border ${theme.border} hover:border-green-700/30 transition-all hover:shadow-md`}>
-              <span className="absolute top-4 left-4 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded z-10">SALE</span>
-              <div className={`h-40 flex items-center justify-center mb-4 ${theme.background} rounded-xl overflow-hidden`}>
-                <img src="https://via.placeholder.com/80x200?text=Oil" alt="Olive Oil" className="h-full object-contain mix-blend-multiply opacity-90" />
-              </div>
-              <p className="text-xs text-green-600 font-bold mb-1 uppercase tracking-wide">Pantry Essentials</p>
-              <h3 className={`font-bold ${theme.textPrimary} text-sm mb-3`}>Artisan Organic Olive Oil</h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-baseline gap-2">
-                  <span className={`font-bold ${theme.textPrimary}`}>$24.00</span>
-                  <span className={`text-xs ${theme.textSecondary} line-through`}>$30.00</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            {recommendedProducts.length > 0 ? (
+              recommendedProducts.map(product => (
+                <div key={product.id} onClick={() => setSelectedProduct(product)} className="cursor-pointer transition-transform hover:scale-105">
+                  <ProductCard 
+                    id={product.id} 
+                    name={product.name} 
+                    price={product.price} 
+                    stockCount={product.rawStock}
+                    // Since the current ProductCard might not have image props yet, 
+                    // we'll pass standard props, but you can adjust your ProductCard later
+                  />
                 </div>
-                <button className={`w-8 h-8 rounded-full ${theme.background} flex items-center justify-center ${theme.textSecondary} hover:bg-green-800 hover:text-white transition-colors`}>
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Card 2 */}
-            <div className={`${theme.surface} rounded-2xl p-4 shadow-sm relative group cursor-pointer border ${theme.border} hover:border-green-700/30 transition-all hover:shadow-md`}>
-              <div className={`h-40 flex items-center justify-center mb-4 ${theme.background} rounded-xl overflow-hidden`}>
-                <img src="https://via.placeholder.com/150x100?text=Bread" alt="Sourdough Loaf" className="h-full object-contain mix-blend-multiply opacity-90" />
-              </div>
-              <p className="text-xs text-green-600 font-bold mb-1 uppercase tracking-wide">Fresh Bakery</p>
-              <h3 className={`font-bold ${theme.textPrimary} text-sm mb-3`}>Rustic Sourdough Loaf</h3>
-              <div className="flex items-center justify-between">
-                <span className={`font-bold ${theme.textPrimary}`}>$8.50</span>
-                <button className={`w-8 h-8 rounded-full ${theme.background} flex items-center justify-center ${theme.textSecondary} hover:bg-green-800 hover:text-white transition-colors`}>
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+              ))
+            ) : (
+              <p className={`text-sm ${theme.textSecondary}`}>More products arriving soon...</p>
+            )}
           </div>
 
           {/* All Products List */}
@@ -291,11 +706,20 @@ export default function MarketplacePage() {
                   </tr>
                 ) : (
                   filteredProducts.map((product) => (
-                    <tr key={product.id} className={`group hover:${theme.surfaceHover} transition-colors`}>
-                      <td className="py-4"><input type="checkbox" className={`rounded text-green-700 ${theme.background} border-gray-400`} /></td>
+                    <tr 
+                      key={product.id} 
+                      onClick={() => setSelectedProduct(product)} 
+                      className={`group hover:${theme.surfaceHover} transition-colors cursor-pointer`}
+                    >
+                      <td className="py-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" className={`rounded text-green-700 ${theme.background} border-gray-400`} /></td>
                       <td className="py-4 flex items-center gap-3">
-                        <div className={`w-10 h-10 border ${theme.border} rounded ${theme.background} flex items-center justify-center font-bold ${theme.textSecondary}`}>
-                           {product.imageLetter}
+                        <div className={`w-10 h-10 border ${theme.border} rounded ${theme.background} flex items-center justify-center font-bold ${theme.textSecondary} shrink-0 relative overflow-hidden bg-gray-100 dark:bg-gray-800`}>
+                           {product.imageUrl ? (
+                             <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                           ) : (
+                             // The fallback letter if no image
+                             product.imageLetter
+                           )}
                         </div>
                         <span className={`font-bold ${theme.textPrimary}`}>{product.name}</span>
                       </td>
@@ -303,7 +727,7 @@ export default function MarketplacePage() {
                       <td className={`py-4 font-bold ${product.status === 'Low Stock' ? 'text-red-500' : `${theme.textSecondary} font-medium`}`}>
                         {product.stockText}
                       </td>
-                      <td className={`py-4 font-bold ${theme.textPrimary}`}>${product.price.toFixed(2)}</td>
+                      <td className={`py-4 font-bold ${theme.textPrimary}`}>${Number(product.price).toFixed(2)}</td>
                       <td className="py-4">
                         <span className={`text-xs font-bold px-3 py-1 rounded-full ${
                           product.status === 'In Stock' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-[#E5F0E6] text-[#2C3E2D]') : 
@@ -314,9 +738,18 @@ export default function MarketplacePage() {
                         </span>
                       </td>
                       <td className="py-4">
-                        <div className={`flex items-center justify-end gap-2 ${theme.textSecondary}`}>
-                          <button className={`p-1 hover:${theme.textPrimary} transition-colors`}><ShoppingCart className="w-4 h-4" /></button>
-                          <button className={`p-1 hover:${theme.textPrimary} transition-colors`}><MoreHorizontal className="w-4 h-4" /></button>
+                        <div className={`flex items-center justify-end gap-2 ${theme.textSecondary}`} onClick={(e) => e.stopPropagation()}>
+                          <button 
+                             onClick={() => handleOpenBuyModal(product)} /* Trigger detail from table */
+                             disabled={product.status === "Out of Stock"}
+                             className={`p-1.5 rounded-md transition-colors ${
+                               product.status === "Out of Stock" 
+                               ? 'opacity-50 cursor-not-allowed'
+                               : 'hover:bg-green-600 hover:text-white'
+                             }`}
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>

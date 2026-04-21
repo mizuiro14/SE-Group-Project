@@ -6,6 +6,7 @@ export type User = {
     user_email: string;
     cellphone_number?: string;
     role?: string;
+    branch?: string;
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -42,19 +43,54 @@ export const searchUserByEmail = async (userEmail: string): Promise<User | null>
 };
 
 export const createUser = async (userData: User | User[]): Promise<User[]> => {
-    const payload = Array.isArray(userData) ? userData : [userData];
+    const dataList = Array.isArray(userData) ? userData : [userData];
+
+    // Strip out the branch before inserting into the `users` table
+    const usersPayload = dataList.map(({ branch, ...rest }) => rest);
 
     // USE THE UNTOUCHED ADMIN CLIENT HERE
-    const { data, error } = await supabaseAdmin
+    const { data: insertedUsers, error } = await supabaseAdmin
         .from('users')
-        .insert(payload)
+        .insert(usersPayload)
         .select();
 
     if (error) {
         throw new Error(error.message);
     }
+    
+    // Safety check in case selection returns null
+    if (!insertedUsers) return [];
+    
+    // Insert into the `seller` or `buyer` table based on the role
+    for (let i = 0; i < dataList.length; i++) {
+        const userId = insertedUsers[i].id;
+        const role = dataList[i].role;
+        
+        if (role === 'seller' && dataList[i].branch) {
+            const { error: sellerError } = await supabaseAdmin
+                .from('seller')
+                .insert({
+                    user_id: userId,
+                    branch: dataList[i].branch
+                });
+                
+            if (sellerError) {
+                console.error("Failed to insert seller data:", sellerError.message);
+            }
+        } else if (role === 'buyer') {
+            const { error: buyerError } = await supabaseAdmin
+                .from('buyer')
+                .insert({
+                    user_id: userId
+                });
+                
+            if (buyerError) {
+                console.error("Failed to insert buyer data:", buyerError.message);
+            }
+        }
+    }
 
-    return data as User[];
+    return insertedUsers as User[];
 };
 
 // ======== THE MISSING FUNCTION ========
