@@ -1,4 +1,4 @@
-import paymentRouter from './routes/paymentRoute';
+import paymentRouter from './paymentRoute';
 
 /**
  * QUICK START: Add this to your app.ts file

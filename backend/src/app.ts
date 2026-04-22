@@ -10,6 +10,7 @@ import shippingRoutes from './routes/shippingRoute';
 import sellerRoutes from './routes/sellerRoute'; // New import
 import buyerRoutes from './routes/buyerRoute';   // New import
 import imageRoutes from './routes/imageRoute';
+import paymentRoutes from './routes/paymentRoute';
 
 const app: Application = express();
 
@@ -28,5 +29,7 @@ app.use('/api/shipping', shippingRoutes);
 app.use('/api/sellers', sellerRoutes); // New route
 app.use('/api/buyers', buyerRoutes);   // New route
 app.use('/api/images', imageRoutes);
+app.use('/api/payments', paymentRoutes);
+
 
 export default app;

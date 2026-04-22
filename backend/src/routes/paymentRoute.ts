@@ -28,9 +28,10 @@ paymentRouter.get('/', getAllPayments);
 paymentRouter.get('/order/:orderId', getPaymentsByOrderId);
 
 /**
- * GET /payments/:id - Get payment by ID
+ * GET /payments/statistics - Get payment statistics
+ * Query: ?startDate=2024-01-01&endDate=2024-12-31
  */
-paymentRouter.get('/:id', getPaymentById);
+paymentRouter.get('/statistics', getPaymentStatistics);
 
 /**
  * POST /payments/:id/refund - Refund a payment
@@ -38,9 +39,8 @@ paymentRouter.get('/:id', getPaymentById);
 paymentRouter.post('/:id/refund', refundPayment);
 
 /**
- * GET /payments/statistics - Get payment statistics
- * Query: ?startDate=2024-01-01&endDate=2024-12-31
+ * GET /payments/:id - Get payment by ID
  */
-paymentRouter.get('/statistics', getPaymentStatistics);
+paymentRouter.get('/:id', getPaymentById);
 
 export default paymentRouter;

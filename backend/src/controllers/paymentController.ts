@@ -2,12 +2,36 @@ import { Request, Response } from 'express';
 import { PaymentService } from '../services/paymentService';
 import { PaymentMethod } from '../types/payment';
 
+const parsePositiveInteger = (value: unknown): number | null => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const isPositiveNumber = (value: unknown): value is number => {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+};
+
+const isPaymentValidationError = (error: unknown): boolean => {
+    return error instanceof Error && (
+        error.message.includes('Invalid payment details') ||
+        error.message.includes('Unsupported payment method')
+    );
+};
+
 export const createPayment = async (req: Request, res: Response): Promise<void> => {
     try {
         const { order_id, amount, method, metadata } = req.body;
 
         // Validate required fields
-        if (!order_id || !amount || !method) {
+        if (order_id === undefined || amount === undefined || method === undefined) {
             res.status(400).json({
                 success: false,
                 message: 'Missing required fields: order_id, amount, method'
@@ -15,8 +39,16 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
+        if (!isPositiveNumber(order_id) || !isPositiveNumber(amount)) {
+            res.status(400).json({
+                success: false,
+                message: 'order_id and amount must be positive numbers'
+            });
+            return;
+        }
+
         // Validate payment method
-        if (!Object.values(PaymentMethod).includes(method)) {
+        if (typeof method !== 'string' || !Object.values(PaymentMethod).includes(method as PaymentMethod)) {
             res.status(400).json({
                 success: false,
                 message: `Invalid payment method. Supported methods: ${Object.values(PaymentMethod).join(', ')}`
@@ -28,7 +60,7 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
         const result = await PaymentService.processPayment({
             order_id,
             amount,
-            method,
+            method: method as PaymentMethod,
             metadata
         });
 
@@ -40,6 +72,14 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
             transaction_id: result.response.transaction_id
         });
     } catch (error) {
+        if (isPaymentValidationError(error)) {
+            res.status(400).json({
+                success: false,
+                message: `Error creating payment: ${error instanceof Error ? error.message : 'Invalid payment request'}`
+            });
+            return;
+        }
+
         res.status(500).json({
             success: false,
             message: `Error creating payment: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -51,15 +91,16 @@ export const getPaymentById = async (req: Request, res: Response): Promise<void>
     try {
         const { id } = req.params;
 
-        if (!id || typeof id !== 'string') {
+        const paymentId = parsePositiveInteger(id);
+        if (paymentId === null) {
             res.status(400).json({
                 success: false,
-                message: 'Payment ID is required'
+                message: 'Payment ID must be a positive integer'
             });
             return;
         }
 
-        const payment = await PaymentService.getPaymentById(parseInt(id));
+        const payment = await PaymentService.getPaymentById(paymentId);
 
         res.status(200).json({
             success: true,
@@ -77,15 +118,16 @@ export const getPaymentsByOrderId = async (req: Request, res: Response): Promise
     try {
         const { orderId } = req.params;
 
-        if (!orderId || typeof orderId !== 'string') {
+        const parsedOrderId = parsePositiveInteger(orderId);
+        if (parsedOrderId === null) {
             res.status(400).json({
                 success: false,
-                message: 'Order ID is required'
+                message: 'Order ID must be a positive integer'
             });
             return;
         }
 
-        const payments = await PaymentService.getPaymentsByOrderId(parseInt(orderId));
+        const payments = await PaymentService.getPaymentsByOrderId(parsedOrderId);
 
         res.status(200).json({
             success: true,
@@ -130,15 +172,16 @@ export const refundPayment = async (req: Request, res: Response): Promise<void> 
     try {
         const { id } = req.params;
 
-        if (!id || typeof id !== 'string') {
+        const paymentId = parsePositiveInteger(id);
+        if (paymentId === null) {
             res.status(400).json({
                 success: false,
-                message: 'Payment ID is required'
+                message: 'Payment ID must be a positive integer'
             });
             return;
         }
 
-        const result = await PaymentService.refundPayment(parseInt(id));
+        const result = await PaymentService.refundPayment(paymentId);
 
         res.status(200).json({
             success: result.response.success,

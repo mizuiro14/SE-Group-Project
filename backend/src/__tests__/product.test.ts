@@ -55,7 +55,9 @@ describe('Product Service Unit Tests', () => {
         supabase.__setResult({ data: list, error: null });
 
         const res = await getAllProducts({ category_id: 1 });
-        expect(res).toEqual(list);
+        expect(res).toHaveLength(1);
+        expect(res[0]).toMatchObject(list[0]);
+        expect(res[0]).toHaveProperty('category', null);
     });
 
     it('gets all products with no filters (happy)', async () => {
@@ -63,7 +65,9 @@ describe('Product Service Unit Tests', () => {
         supabase.__setResult({ data: list, error: null });
 
         const res = await getAllProducts({});
-        expect(res).toEqual(list);
+        expect(res).toHaveLength(1);
+        expect(res[0]).toMatchObject(list[0]);
+        expect(res[0]).toHaveProperty('category', null);
     });
 
     it('handles error when retrieving all products', async () => {

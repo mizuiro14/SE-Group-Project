@@ -3,6 +3,26 @@ import { Payment, PaymentRequest, PaymentResponse, PaymentMethod } from '../type
 import { PaymentStrategyFactory } from '../strategies/paymentStrategyFactory';
 
 export class PaymentService {
+    private static mapStrategyStatus(status?: string): 'pending' | 'completed' | 'failed' | 'refunded' {
+        if (!status) {
+            return 'pending';
+        }
+
+        const statusMap: Record<string, 'pending' | 'completed' | 'failed' | 'refunded'> = {
+            completed: 'completed',
+            pending: 'pending',
+            failed: 'failed',
+            refunded: 'refunded'
+        };
+
+        const mapped = statusMap[status];
+        if (!mapped) {
+            throw new Error(`Unsupported payment status from strategy: ${status}`);
+        }
+
+        return mapped;
+    }
+
     /**
      * Create a new payment record in the database
      */
@@ -124,6 +144,12 @@ export class PaymentService {
             // Get the appropriate payment strategy
             const strategy = PaymentStrategyFactory.createStrategy(paymentRequest.method);
 
+            // Validate method-specific payment details before processing.
+            const isValidDetails = await strategy.validatePaymentDetails(paymentRequest.metadata || {});
+            if (!isValidDetails) {
+                throw new Error('Invalid payment details for selected payment method');
+            }
+
             // Process payment through strategy
             const paymentResponse = await strategy.processPayment(paymentRequest);
 
@@ -135,14 +161,7 @@ export class PaymentService {
             );
 
             // Update payment status based on strategy response
-            const statusMap: { [key: string]: 'pending' | 'completed' | 'failed' | 'refunded'; } = {
-                'completed': 'completed',
-                'pending': 'pending',
-                'failed': 'failed',
-                'refunded': 'refunded'
-            };
-
-            const newStatus = statusMap[paymentResponse.status || 'pending'];
+            const newStatus = this.mapStrategyStatus(paymentResponse.status);
             payment = await this.updatePaymentStatus(payment.id, newStatus);
 
             return {
@@ -185,14 +204,7 @@ export class PaymentService {
             const refundResponse = await strategy.refundPayment(paymentId, payment.amount);
 
             // Update payment status
-            const statusMap: { [key: string]: 'pending' | 'completed' | 'failed' | 'refunded'; } = {
-                'completed': 'completed',
-                'pending': 'pending',
-                'failed': 'failed',
-                'refunded': 'refunded'
-            };
-
-            const newStatus = statusMap[refundResponse.status || 'pending'];
+            const newStatus = this.mapStrategyStatus(refundResponse.status);
             const updatedPayment = await this.updatePaymentStatus(paymentId, newStatus);
 
             return {
