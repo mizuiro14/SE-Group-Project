@@ -75,10 +75,29 @@ export const updateUserProfile = async (req: Request, res: Response) => {
     }
 };
 
+export const deleteTestUser = async (req: Request, res: Response) => {
+    try {
+        // Force TypeScript to treat this as a string
+        const email = req.params.email as string; 
+        
+        if (!email) {
+            res.status(400).json({ error: "Email parameter is required" });
+            return;
+        }
+
+        // Now TypeScript knows for sure it is a single string!
+        await userService.deleteTestUser(email);
+        res.status(200).json({ message: `Test user ${email} deleted successfully` });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // ! TEMPORARY
 export default {
     getUsers,
     createUser,
     searchUser,
-    updateUserProfile // <-- Add it to the export
+    updateUserProfile,
+    deleteTestUser // <-- Add it to the export
 };

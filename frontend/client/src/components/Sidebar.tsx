@@ -1,20 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Star, Package, Truck, Users, User } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext'; // <-- Import the hook
+import { useAuth } from '@/context/AuthContext';
 
 export default function Sidebar() {
-  const [user, setUser] = useState<any>(null);
+  const { user, isSeller } = useAuth();
   const pathname = usePathname();
   const { theme } = useTheme(); // <-- Get the global theme
-
-  useEffect(() => {
-    // ... your standard fetch user logic here ...
-  }, []);
 
   const isActive = (path: string) => pathname === path;
 
@@ -54,12 +51,14 @@ export default function Sidebar() {
                   Best Sellers
                 </Link>
               </li>
-              <li>
-                <Link href="/stock" className={isActive('/stock') ? activeClass : inactiveClass}>
-                  <Package className={`w-5 h-5 ${isActive('/stock') ? 'text-green-700' : theme.textSecondary}`} />
-                  Stock Page
-                </Link>
-              </li>
+              {isSeller && (
+                <li>
+                  <Link href="/stock" className={isActive('/stock') ? activeClass : inactiveClass}>
+                    <Package className={`w-5 h-5 ${isActive('/stock') ? 'text-green-700' : theme.textSecondary}`} />
+                    Stock Page
+                  </Link>
+                </li>
+              )}
               <li>
                 <Link href="/delivery" className={isActive('/delivery') ? activeClass : inactiveClass}>
                   <Truck className={`w-5 h-5 ${isActive('/delivery') ? 'text-green-700' : theme.textSecondary}`} />
@@ -87,7 +86,7 @@ export default function Sidebar() {
           </div>
         </nav>
       </div>
-
+      
       {user && (
         <div className={`p-4 border-t ${theme.border}`}>
           <div className={`flex items-center gap-3 px-3 py-2 rounded-lg ${theme.surfaceHover} cursor-pointer transition-colors max-w-full overflow-hidden`}>

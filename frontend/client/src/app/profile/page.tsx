@@ -190,8 +190,8 @@ export default function ProfilePage() {
   }, [router]);
 
   const handleLogout = () => {
-  logout();
-};
+    logout();
+  };
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
@@ -288,8 +288,12 @@ export default function ProfilePage() {
               
               <div className={`${theme.surface} rounded-2xl p-6 shadow-sm border ${theme.border} flex flex-col items-center transition-colors duration-300`}>
                 <div className="relative mb-4">
-                  <div className={`w-24 h-24 rounded-full ${theme.background} overflow-hidden border-4 ${theme.border} shadow-sm`}>
-                    <img src="/assets/avif-test-image.avif" alt="Avatar" className="w-full h-full object-cover" />
+                  <div className={`w-24 h-24 rounded-full ${theme.background} overflow-hidden border-4 ${theme.border} shadow-sm bg-white`}>
+                    <img 
+                      src={user?.user_metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=default"} 
+                      alt="Avatar" 
+                      className="w-full h-full object-cover" 
+                    />
                   </div>
                   <button className={`absolute bottom-0 right-0 w-8 h-8 ${theme.surface} border ${theme.border} rounded-full flex items-center justify-center ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors shadow-sm`}>
                     <Edit2 className="w-3.5 h-3.5" />

@@ -131,10 +131,29 @@ export const updateSupabaseUser = async (userId: string, data: any) => {
     return updatedAuthUser.user;
 };
 
+export const deleteTestUser = async (email: string) => {
+    // Prevent accidentally deleting real users!
+    if (!email.includes('testuser_')) {
+        throw new Error("Only test users can be deleted this way.");
+    }
+
+    const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('user_email', email);
+
+    if (error) throw new Error(error.message);
+    
+    // Note: If your Supabase is set up correctly with "Cascade" deletes, 
+    // deleting this user will automatically delete their products too!
+    return true;
+};
+
 export default {
     getUsers,
     createUser,
     searchUser,
     searchUserByEmail,
-    updateSupabaseUser
+    updateSupabaseUser,
+    deleteTestUser
 };
