@@ -1,11 +1,196 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Download, Plus, Bell, ShoppingCart, MapPin, Truck, CheckCircle2, AlertTriangle, MoreVertical } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { useTheme } from '@/theme/ThemeContext';
 
+type ShippingStatus = 'pending' | 'shipped' | 'delivered' | 'cancelled';
+
+type Shipping = {
+  id: number;
+  order_id: number;
+  address: string;
+  status: ShippingStatus;
+  shipped_date: string | null;
+  delivered_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const API_BASE_URL = 'http://localhost:5000/api';
+
+const STATUS_LABELS: Record<ShippingStatus, string> = {
+  pending: 'Queued',
+  shipped: 'In Transit',
+  delivered: 'Delivered',
+  cancelled: 'Issues',
+};
+
+const STATUS_PROGRESS: Record<ShippingStatus, number> = {
+  pending: 20,
+  shipped: 75,
+  delivered: 100,
+  cancelled: 0,
+};
+
+const NEXT_STATUS: Record<ShippingStatus, ShippingStatus> = {
+  pending: 'shipped',
+  shipped: 'delivered',
+  delivered: 'delivered',
+  cancelled: 'cancelled',
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleString();
+};
+
+const formatShortDate = (value?: string | null): string => {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleDateString();
+};
+
+const getStatusBadgeClass = (status: ShippingStatus, isDarkMode: boolean): string => {
+  switch (status) {
+    case 'pending':
+      return isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600';
+    case 'shipped':
+      return isDarkMode ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-600';
+    case 'delivered':
+      return isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-600';
+    case 'cancelled':
+    default:
+      return isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-600';
+  }
+};
+
 export default function DeliveryPage() {
   const { theme, isDarkMode } = useTheme();
+  const [shippings, setShippings] = useState<Shipping[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isCreating, setIsCreating] = useState<boolean>(false);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activeShippingId, setActiveShippingId] = useState<number | null>(null);
+
+  const loadShippings = async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch(`${API_BASE_URL}/shipping`);
+      if (!response.ok) {
+        throw new Error(`Failed to load deliveries (${response.status})`);
+      }
+      const data = (await response.json()) as Shipping[];
+      setShippings(data);
+      if (data.length > 0 && activeShippingId === null) {
+        setActiveShippingId(data[0].id);
+      }
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to load deliveries.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadShippings();
+  }, []);
+
+  const filteredShippings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return shippings;
+    return shippings.filter((shipping) => {
+      const orderId = `ord-${shipping.order_id}`;
+      return (
+        shipping.address.toLowerCase().includes(query) ||
+        orderId.toLowerCase().includes(query) ||
+        String(shipping.id).includes(query)
+      );
+    });
+  }, [shippings, searchQuery]);
+
+  const queuedShippings = filteredShippings.filter((shipping) => shipping.status === 'pending');
+  const inTransitShippings = filteredShippings.filter((shipping) => shipping.status === 'shipped');
+  const deliveredShippings = filteredShippings.filter((shipping) => shipping.status === 'delivered');
+  const issueShippings = filteredShippings.filter((shipping) => shipping.status === 'cancelled');
+
+  const activeShipping = useMemo(() => {
+    if (activeShippingId !== null) {
+      return filteredShippings.find((shipping) => shipping.id === activeShippingId) ?? null;
+    }
+    return inTransitShippings[0] ?? queuedShippings[0] ?? deliveredShippings[0] ?? issueShippings[0] ?? null;
+  }, [activeShippingId, filteredShippings, deliveredShippings, inTransitShippings, issueShippings, queuedShippings]);
+
+  const handleCreateShipping = async (): Promise<void> => {
+    const orderInput = window.prompt('Enter order ID');
+    if (!orderInput) return;
+    const orderId = Number(orderInput);
+    if (!Number.isFinite(orderId)) {
+      window.alert('Order ID must be a number.');
+      return;
+    }
+    const address = window.prompt('Enter delivery address');
+    if (!address) return;
+
+    try {
+      setIsCreating(true);
+      setError(null);
+      const response = await fetch(`${API_BASE_URL}/shipping`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order_id: orderId, address }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error ?? `Failed to create delivery (${response.status})`);
+      }
+
+      await loadShippings();
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to create delivery.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleAdvanceStatus = async (): Promise<void> => {
+    if (!activeShipping) return;
+    const nextStatus = NEXT_STATUS[activeShipping.status];
+    if (nextStatus === activeShipping.status) return;
+
+    try {
+      setIsUpdating(true);
+      setError(null);
+      const response = await fetch(`${API_BASE_URL}/shipping/${activeShipping.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error ?? `Failed to update delivery (${response.status})`);
+      }
+
+      const updatedShipping = (await response.json()) as Shipping;
+      setShippings((prev) => prev.map((shipping) => (shipping.id === updatedShipping.id ? updatedShipping : shipping)));
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to update delivery.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>
@@ -21,6 +206,8 @@ export default function DeliveryPage() {
               <input
                 type="text"
                 placeholder="Search orders, tracking numbers, or members..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className={`w-full pl-10 pr-4 py-2 ${theme.background} border ${theme.border} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-700/50 transition-all ${theme.textPrimary} placeholder-gray-400`}
               />
             </div>
@@ -31,9 +218,13 @@ export default function DeliveryPage() {
               Export Report
             </button>
             <div className="flex items-center gap-2 bg-green-800 p-1 rounded-lg shadow-sm">
-              <button className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10 rounded transition-colors">
+              <button
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10 rounded transition-colors disabled:opacity-60"
+                onClick={handleCreateShipping}
+                disabled={isCreating}
+              >
                 <Plus className="w-4 h-4" />
-                New Delivery
+                {isCreating ? 'Creating...' : 'New Delivery'}
               </button>
               <div className="w-px h-4 bg-white/20 mx-1"></div>
               <button className="p-1.5 text-white hover:bg-white/10 rounded transition-colors relative">
@@ -60,7 +251,7 @@ export default function DeliveryPage() {
               </div>
               <h3 className={`${theme.textSecondary} text-sm font-medium mb-1`}>Queued Orders</h3>
               <div className="flex items-end gap-3">
-                <span className={`text-3xl font-bold ${theme.textPrimary}`}>124</span>
+                <span className={`text-3xl font-bold ${theme.textPrimary}`}>{queuedShippings.length}</span>
                 <span className={`text-sm font-medium ${isDarkMode ? 'text-green-400' : 'text-green-600'} mb-1 flex items-center`}>↑ 12%</span>
               </div>
             </div>
@@ -74,7 +265,7 @@ export default function DeliveryPage() {
               </div>
               <h3 className={`${theme.textSecondary} text-sm font-medium mb-1`}>In Transit</h3>
               <div className="flex items-end gap-3">
-                <span className={`text-3xl font-bold ${theme.textPrimary}`}>48</span>
+                <span className={`text-3xl font-bold ${theme.textPrimary}`}>{inTransitShippings.length}</span>
                 <span className={`text-sm font-medium ${isDarkMode ? 'text-green-400' : 'text-green-600'} mb-1 flex items-center`}>↑ 5%</span>
               </div>
             </div>
@@ -88,7 +279,7 @@ export default function DeliveryPage() {
               </div>
               <h3 className={`${theme.textSecondary} text-sm font-medium mb-1`}>Delivered</h3>
               <div className="flex items-end gap-3">
-                <span className={`text-3xl font-bold ${theme.textPrimary}`}>892</span>
+                <span className={`text-3xl font-bold ${theme.textPrimary}`}>{deliveredShippings.length}</span>
                 <span className={`text-sm font-medium ${isDarkMode ? 'text-green-400' : 'text-green-600'} mb-1 flex items-center`}>↑ 18%</span>
               </div>
             </div>
@@ -102,7 +293,7 @@ export default function DeliveryPage() {
               </div>
               <h3 className={`${theme.textSecondary} text-sm font-medium mb-1`}>Issues / Exceptions</h3>
               <div className="flex items-end gap-3">
-                <span className={`text-3xl font-bold ${theme.textPrimary}`}>7</span>
+                <span className={`text-3xl font-bold ${theme.textPrimary}`}>{issueShippings.length}</span>
                 <span className={`text-sm font-medium ${isDarkMode ? 'text-red-400' : 'text-red-600'} mb-1 flex items-center`}>↑ 2</span>
               </div>
             </div>
@@ -114,7 +305,9 @@ export default function DeliveryPage() {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <h2 className={`text-lg font-bold ${theme.textPrimary}`}>Delivery Board</h2>
-                  <span className={`px-2.5 py-1 ${theme.background} ${theme.textSecondary} text-xs font-medium rounded-full border ${theme.border}`}>179 Active Orders</span>
+                  <span className={`px-2.5 py-1 ${theme.background} ${theme.textSecondary} text-xs font-medium rounded-full border ${theme.border}`}>
+                    {filteredShippings.length} Active Orders
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="relative">
@@ -122,11 +315,20 @@ export default function DeliveryPage() {
                     <input
                       type="text"
                       placeholder="Search orders..."
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
                       className={`pl-9 pr-4 py-1.5 ${theme.background} border ${theme.border} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-700/20 w-48 ${theme.textPrimary} placeholder-gray-400`}
                     />
                   </div>
                 </div>
               </div>
+
+              {(isLoading || error) && (
+                <div className="mb-4 text-xs">
+                  {isLoading && <span className={`${theme.textSecondary}`}>Loading deliveries...</span>}
+                  {error && <span className="text-red-500">{error}</span>}
+                </div>
+              )}
 
               <div className="flex flex-1 gap-6 overflow-x-auto pb-2">
                 {/* Column: Queued */}
@@ -136,51 +338,44 @@ export default function DeliveryPage() {
                       <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                       <h3 className={`font-semibold ${theme.textPrimary} text-sm`}>Queued</h3>
                     </div>
-                    <span className={`text-xs font-medium ${theme.textSecondary} ${theme.surface} px-2 py-1 rounded-md shadow-sm border ${theme.border}`}>124</span>
+                    <span className={`text-xs font-medium ${theme.textSecondary} ${theme.surface} px-2 py-1 rounded-md shadow-sm border ${theme.border}`}>
+                      {queuedShippings.length}
+                    </span>
                   </div>
-                  
-                  <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                    {/* Card 1 */}
-                    <div className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border} cursor-pointer hover:border-green-700/30 transition-colors`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <span className={`font-medium ${theme.textPrimary} text-sm`}>ORD-9823</span>
-                        <span className={`text-xs ${theme.textSecondary}`}>2h ago</span>
-                      </div>
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-blue-900/20 overflow-hidden flex-shrink-0">
-                        </div>
-                        <span className={`text-sm font-medium ${theme.textPrimary}`}>Sarah Jenkins</span>
-                      </div>
-                      <div className="flex items-start gap-2 mb-5">
-                        <MapPin className={`w-4 h-4 ${theme.textSecondary} mt-0.5 flex-shrink-0`} />
-                        <span className={`text-sm ${theme.textSecondary}`}>123 Maple St, Seattle WA</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className={`px-2.5 py-1 ${isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'} text-xs font-medium rounded`}>Standard</span>
-                        <span className={`text-xs ${theme.textSecondary}`}>+3</span>
-                      </div>
-                    </div>
 
-                    {/* Card 2 */}
-                    <div className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border} cursor-pointer hover:border-green-700/30 transition-colors`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <span className={`font-medium ${theme.textPrimary} text-sm`}>ORD-9824</span>
-                        <span className={`text-xs ${theme.textSecondary}`}>3h ago</span>
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                    {queuedShippings.length === 0 && (
+                      <div className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border}`}>
+                        <span className={`text-xs ${theme.textSecondary} font-medium`}>No queued deliveries</span>
                       </div>
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-pink-900/20 overflow-hidden flex-shrink-0">
+                    )}
+
+                    {queuedShippings.map((shipping) => (
+                      <div
+                        key={shipping.id}
+                        className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border} cursor-pointer hover:border-green-700/30 transition-colors`}
+                        onClick={() => setActiveShippingId(shipping.id)}
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <span className={`font-medium ${theme.textPrimary} text-sm`}>ORD-{shipping.order_id}</span>
+                          <span className={`text-xs ${theme.textSecondary}`}>{formatShortDate(shipping.created_at)}</span>
                         </div>
-                        <span className={`text-sm font-medium ${theme.textPrimary}`}>Michael Chang</span>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-8 h-8 rounded-full bg-blue-900/20 overflow-hidden flex-shrink-0"></div>
+                          <span className={`text-sm font-medium ${theme.textPrimary}`}>Order #{shipping.order_id}</span>
+                        </div>
+                        <div className="flex items-start gap-2 mb-5">
+                          <MapPin className={`w-4 h-4 ${theme.textSecondary} mt-0.5 flex-shrink-0`} />
+                          <span className={`text-sm ${theme.textSecondary}`}>{shipping.address}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className={`px-2.5 py-1 ${getStatusBadgeClass(shipping.status, isDarkMode)} text-xs font-medium rounded`}>
+                            {STATUS_LABELS[shipping.status]}
+                          </span>
+                          <span className={`text-xs ${theme.textSecondary}`}>#{shipping.id}</span>
+                        </div>
                       </div>
-                      <div className="flex items-start gap-2 mb-5">
-                        <MapPin className={`w-4 h-4 ${theme.textSecondary} mt-0.5 flex-shrink-0`} />
-                        <span className={`text-sm ${theme.textSecondary}`}>450 Oak Ave, Portland OR</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className={`px-2.5 py-1 ${isDarkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-600'} text-xs font-medium rounded`}>Express</span>
-                        <span className={`text-xs ${theme.textSecondary}`}>1 item</span>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -191,38 +386,58 @@ export default function DeliveryPage() {
                       <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
                       <h3 className={`font-semibold ${theme.textPrimary} text-sm`}>In Transit</h3>
                     </div>
-                    <span className={`text-xs font-medium ${theme.textSecondary} ${theme.surface} px-2 py-1 rounded-md shadow-sm border ${theme.border}`}>48</span>
+                    <span className={`text-xs font-medium ${theme.textSecondary} ${theme.surface} px-2 py-1 rounded-md shadow-sm border ${theme.border}`}>
+                      {inTransitShippings.length}
+                    </span>
                   </div>
 
                   <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                    {/* Active In-Transit Card */}
-                    <div className={`${theme.surface} p-5 rounded-lg shadow-sm border-2 border-green-700 relative overflow-hidden`}>
-                      <div className="absolute top-0 left-0 w-1 h-full bg-green-700"></div>
-                      <div className="flex justify-between items-start mb-4">
-                        <span className={`font-bold ${theme.textPrimary} text-sm tracking-wide`}>9128736455</span>
-                        <span className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-green-400 bg-green-900/30' : 'text-green-800 bg-green-100'} tracking-wider px-2 py-1 rounded`}>Active</span>
+                    {inTransitShippings.length === 0 && (
+                      <div className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border}`}>
+                        <span className={`text-xs ${theme.textSecondary} font-medium`}>No deliveries in transit</span>
                       </div>
-                      <div className="flex items-center gap-3 mb-5">
-                        <div className={`w-10 h-10 rounded-full ${theme.background} overflow-hidden flex-shrink-0 border ${theme.border}`}>
-                        </div>
-                        <span className={`font-medium ${theme.textPrimary}`}>Ali Saleh</span>
-                      </div>
-                      
-                      <div className="mb-5">
-                        <div className="flex justify-between text-sm mb-1.5">
-                          <span className={`${theme.textSecondary} flex items-center gap-1.5`}><Truck className="w-4 h-4" /> Out for delivery</span>
-                        </div>
-                        <div className={`h-2 ${theme.background} rounded-full w-full overflow-hidden`}>
-                          <div className="h-full bg-green-700 w-[75%] rounded-full"></div>
-                        </div>
-                      </div>
+                    )}
 
-                      <div className={`flex items-center justify-between pt-4 border-t ${theme.border}`}>
-                        <span className={`text-sm font-medium ${theme.textSecondary}`}>ETA: 2:30 PM</span>
-                        <div className={`w-6 h-6 rounded-full ${theme.background} border ${theme.border} overflow-hidden`}>
+                    {inTransitShippings.map((shipping) => (
+                      <div
+                        key={shipping.id}
+                        className={`${theme.surface} p-5 rounded-lg shadow-sm border-2 border-green-700 relative overflow-hidden cursor-pointer`}
+                        onClick={() => setActiveShippingId(shipping.id)}
+                      >
+                        <div className="absolute top-0 left-0 w-1 h-full bg-green-700"></div>
+                        <div className="flex justify-between items-start mb-4">
+                          <span className={`font-bold ${theme.textPrimary} text-sm tracking-wide`}>ORD-{shipping.order_id}</span>
+                          <span className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-green-400 bg-green-900/30' : 'text-green-800 bg-green-100'} tracking-wider px-2 py-1 rounded`}>
+                            Active
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-5">
+                          <div className={`w-10 h-10 rounded-full ${theme.background} overflow-hidden flex-shrink-0 border ${theme.border}`}></div>
+                          <span className={`font-medium ${theme.textPrimary}`}>Order #{shipping.order_id}</span>
+                        </div>
+
+                        <div className="mb-5">
+                          <div className="flex justify-between text-sm mb-1.5">
+                            <span className={`${theme.textSecondary} flex items-center gap-1.5`}>
+                              <Truck className="w-4 h-4" /> {STATUS_LABELS[shipping.status]}
+                            </span>
+                          </div>
+                          <div className={`h-2 ${theme.background} rounded-full w-full overflow-hidden`}>
+                            <div
+                              className="h-full bg-green-700 rounded-full"
+                              style={{ width: `${STATUS_PROGRESS[shipping.status]}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        <div className={`flex items-center justify-between pt-4 border-t ${theme.border}`}>
+                          <span className={`text-sm font-medium ${theme.textSecondary}`}>
+                            Shipped: {formatShortDate(shipping.shipped_date ?? shipping.created_at)}
+                          </span>
+                          <div className={`w-6 h-6 rounded-full ${theme.background} border ${theme.border} overflow-hidden`}></div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -234,11 +449,29 @@ export default function DeliveryPage() {
                       <h3 className={`font-semibold ${theme.textPrimary} text-sm`}>Delivered</h3>
                     </div>
                   </div>
-                  
+
                   <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                     <div className={`${theme.surface} opacity-60 p-5 rounded-lg border border-dashed ${theme.border}`}>
-                       <span className={`text-xs ${theme.textSecondary} font-medium`}>Delivered at 10:15 AM</span>
-                     </div>
+                    {deliveredShippings.length === 0 && (
+                      <div className={`${theme.surface} opacity-60 p-5 rounded-lg border border-dashed ${theme.border}`}>
+                        <span className={`text-xs ${theme.textSecondary} font-medium`}>No delivered orders yet</span>
+                      </div>
+                    )}
+
+                    {deliveredShippings.map((shipping) => (
+                      <div
+                        key={shipping.id}
+                        className={`${theme.surface} opacity-60 p-5 rounded-lg border border-dashed ${theme.border} cursor-pointer`}
+                        onClick={() => setActiveShippingId(shipping.id)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={`font-medium ${theme.textPrimary} text-sm`}>ORD-{shipping.order_id}</span>
+                          <span className={`text-xs ${theme.textSecondary}`}>{formatShortDate(shipping.delivered_date ?? shipping.updated_at)}</span>
+                        </div>
+                        <span className={`text-xs ${theme.textSecondary} font-medium`}>
+                          Delivered at {formatDate(shipping.delivered_date ?? shipping.updated_at)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -250,11 +483,37 @@ export default function DeliveryPage() {
                       <h3 className={`font-semibold ${theme.textPrimary} text-sm`}>Issues</h3>
                     </div>
                     {/* Empty pill for count */}
-                    <span className={`text-xs font-medium ${theme.textSecondary} ${theme.surface} px-2 py-1 rounded-md shadow-sm border ${theme.border}`}>0</span>
+                    <span className={`text-xs font-medium ${theme.textSecondary} ${theme.surface} px-2 py-1 rounded-md shadow-sm border ${theme.border}`}>
+                      {issueShippings.length}
+                    </span>
                   </div>
-                  
+
                   <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                     {/* Leave empty for now as requested */}
+                    {issueShippings.length === 0 && (
+                      <div className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border}`}>
+                        <span className={`text-xs ${theme.textSecondary} font-medium`}>No delivery issues</span>
+                      </div>
+                    )}
+
+                    {issueShippings.map((shipping) => (
+                      <div
+                        key={shipping.id}
+                        className={`${theme.surface} p-5 rounded-lg shadow-sm border ${theme.border} cursor-pointer hover:border-red-500/40 transition-colors`}
+                        onClick={() => setActiveShippingId(shipping.id)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={`font-medium ${theme.textPrimary} text-sm`}>ORD-{shipping.order_id}</span>
+                          <span className={`text-xs ${theme.textSecondary}`}>{formatShortDate(shipping.updated_at)}</span>
+                        </div>
+                        <div className="flex items-start gap-2 mb-4">
+                          <MapPin className={`w-4 h-4 ${theme.textSecondary} mt-0.5 flex-shrink-0`} />
+                          <span className={`text-sm ${theme.textSecondary}`}>{shipping.address}</span>
+                        </div>
+                        <span className={`px-2.5 py-1 ${getStatusBadgeClass(shipping.status, isDarkMode)} text-xs font-medium rounded`}>
+                          {STATUS_LABELS[shipping.status]}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -282,13 +541,25 @@ export default function DeliveryPage() {
               <div className="p-5 flex-1 flex flex-col">
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className={`text-sm font-bold ${theme.textPrimary} mb-1`}>Tracking 9128736455</h3>
+                    <h3 className={`text-sm font-bold ${theme.textPrimary} mb-1`}>
+                      {activeShipping ? `Tracking ORD-${activeShipping.order_id}` : 'No active delivery'}
+                    </h3>
                   </div>
-                  <span className={`px-2 py-1 ${theme.background} ${theme.textSecondary} text-[10px] font-bold uppercase rounded border ${theme.border}`}>In Transit</span>
+                  <span className={`px-2 py-1 ${theme.background} ${theme.textSecondary} text-[10px] font-bold uppercase rounded border ${theme.border}`}>
+                    {activeShipping ? STATUS_LABELS[activeShipping.status] : 'No data'}
+                  </span>
                 </div>
-                
-                <p className={`text-xs ${theme.textSecondary} mb-1`}>ETA: Wednesday, April 28 • 2:30 PM</p>
-                <p className={`text-xs ${theme.textSecondary} mb-6`}>Driver: John D. • Vehicle: DHL Van</p>
+
+                <p className={`text-xs ${theme.textSecondary} mb-1`}>
+                  {activeShipping
+                    ? `Updated: ${formatDate(activeShipping.updated_at)}`
+                    : 'Pick a delivery to view tracking.'}
+                </p>
+                <p className={`text-xs ${theme.textSecondary} mb-6`}>
+                  {activeShipping
+                    ? `Address: ${activeShipping.address}`
+                    : 'No delivery details available.'}
+                </p>
 
                 {/* Tabs */}
                 <div className={`flex border-b ${theme.border} mb-4`}>
@@ -301,14 +572,22 @@ export default function DeliveryPage() {
                 <div className="flex-1">
                   <div className="relative pl-6 pb-6 border-l-2 border-green-700/20 ml-2">
                     <div className={`absolute w-3 h-3 ${theme.surface} border-2 ${isDarkMode ? 'border-green-500' : 'border-green-800'} rounded-full -left-[7px] top-1`}></div>
-                    <h4 className={`text-sm font-semibold ${theme.textPrimary}`}>On vehicle for delivery</h4>
-                    <p className={`text-xs ${theme.textSecondary} mt-0.5`}>East Lansing, MI 48823, US</p>
-                    <span className={`text-xs ${theme.textSecondary} mt-1 block opacity-70`}>Today at 10:23 AM</span>
+                    <h4 className={`text-sm font-semibold ${theme.textPrimary}`}>
+                      {activeShipping ? STATUS_LABELS[activeShipping.status] : 'Waiting for delivery'}
+                    </h4>
+                    <p className={`text-xs ${theme.textSecondary} mt-0.5`}>
+                      {activeShipping ? activeShipping.address : 'No address provided'}
+                    </p>
+                    <span className={`text-xs ${theme.textSecondary} mt-1 block opacity-70`}>
+                      {activeShipping ? formatDate(activeShipping.updated_at) : 'Not started'}
+                    </span>
                   </div>
-                  
+
                   <div className="relative pl-6 ml-2">
                     <div className={`absolute w-3 h-3 ${theme.background} border-2 ${theme.border} rounded-full -left-[7px] top-1`}></div>
-                    <h4 className={`text-sm font-medium ${theme.textSecondary}`}>In Transit</h4>
+                    <h4 className={`text-sm font-medium ${theme.textSecondary}`}>
+                      {activeShipping ? `Order #${activeShipping.order_id}` : 'Select a delivery'}
+                    </h4>
                   </div>
                 </div>
 
@@ -318,8 +597,12 @@ export default function DeliveryPage() {
                       <div className={`w-8 h-8 rounded-full ${theme.background} border ${theme.border} overflow-hidden flex-shrink-0`}>
                       </div>
                       <div>
-                        <p className={`text-sm font-medium ${theme.textPrimary}`}>Ali Saleh</p>
-                        <p className={`text-[10px] ${theme.textSecondary}`}>Premium Member</p>
+                        <p className={`text-sm font-medium ${theme.textPrimary}`}>
+                          {activeShipping ? `Delivery #${activeShipping.id}` : 'Delivery Details'}
+                        </p>
+                        <p className={`text-[10px] ${theme.textSecondary}`}>
+                          {activeShipping ? `Status: ${STATUS_LABELS[activeShipping.status]}` : 'No delivery selected'}
+                        </p>
                       </div>
                     </div>
                     <button className={`p-2 border ${theme.border} rounded-lg ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`}>
@@ -330,8 +613,12 @@ export default function DeliveryPage() {
                     <button className={`py-2.5 text-xs font-medium ${theme.textPrimary} bg-transparent border ${theme.border} rounded-lg hover:${theme.surfaceHover} transition-colors`}>
                       View Invoice
                     </button>
-                    <button className="py-2.5 text-xs font-medium text-white bg-green-800 rounded-lg hover:bg-green-900 transition-colors shadow-sm">
-                      Update Status
+                    <button
+                      className="py-2.5 text-xs font-medium text-white bg-green-800 rounded-lg hover:bg-green-900 transition-colors shadow-sm disabled:opacity-60"
+                      onClick={handleAdvanceStatus}
+                      disabled={!activeShipping || isUpdating || NEXT_STATUS[activeShipping.status] === activeShipping.status}
+                    >
+                      {isUpdating ? 'Updating...' : 'Update Status'}
                     </button>
                   </div>
                 </div>
