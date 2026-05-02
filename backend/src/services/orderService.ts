@@ -72,12 +72,12 @@ export const createOrder = async (order: Order): Promise<Order> => {
     const newOrderId = (orderData as any).id;
 
     if (items.length > 0) {
+        // Map the Next.js `unit_price` payload property to the actual `price` database column
         const itemsToInsert = items.map(it => ({
             order_id: newOrderId,
             product_id: it.product_id,
             quantity: it.quantity,
-            unit_price: it.unit_price,
-            total_price: it.unit_price * it.quantity,
+            price: it.unit_price
         }));
 
         const { error: itemsError } = await supabase
