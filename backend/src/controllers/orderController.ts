@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import orderService from '../services/orderService';
-import { supabase } from '../SupabaseClient';
+import { supabase, supabaseAdmin } from '../SupabaseClient';
 
 const parseStringParam = (param: string | string[]): string => {
     return Array.isArray(param) ? param[0] : param;
@@ -79,7 +79,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
         // If the frontend sent an email, look up the numeric ID from the custom users table
         if (email && !finalUserId) {
-            let { data, error } = await supabase
+            let { data, error } = await supabaseAdmin
                 .from('users')
                 .select('id')
                 .eq('user_email', email)
@@ -87,7 +87,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
             // Self-Heal: If the user isn't in public.users (common dev issue), create them immediately
             if (error || !data) {
-                const { data: newUser, error: insertError } = await supabase
+                const { data: newUser, error: insertError } = await supabaseAdmin
                     .from('users')
                     .insert({ 
                         user_email: email, 
@@ -98,6 +98,7 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
                     .single();
 
                 if (insertError || !newUser) {
+                     console.error("Self-Heal Database Error:", insertError);
                      res.status(500).json({ error: 'Could not self-heal missing database user' });
                      return;
                 }

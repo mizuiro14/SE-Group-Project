@@ -9,6 +9,7 @@ import {
   Package, Key, Shield, LogOut, Plus, Edit2, Trash2, ChevronDown, CreditCard, Mail, Building, Sun, Moon
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { usePayment } from '@/context/PaymentContext';
 
 // ============================================================================
 // --- STRATEGY PATTERN TYPES & INTERFACES (Payment Methods) ---
@@ -23,16 +24,24 @@ interface PaymentMethodData {
 }
 
 interface PaymentRenderStrategy {
-  render: (method: PaymentMethodData, cardholder: string, theme: any, isDarkMode: boolean) => React.ReactNode;
+  render: (
+    method: PaymentMethodData, 
+    cardholder: string, 
+    theme: any, 
+    isDarkMode: boolean,
+    onSelect: (id: string) => void,
+    onEdit: (method: PaymentMethodData) => void,
+    onDelete: (id: string) => void
+  ) => React.ReactNode;
 }
 
 const CreditCardStrategy: PaymentRenderStrategy = {
-  render: (method, cardholder, theme, isDarkMode) => {
+  render: (method, cardholder, theme, isDarkMode, onSelect, onEdit, onDelete) => {
     const { brand, last4, exp } = method.details;
     const isDefault = method.isDefault;
     
     return (
-      <div key={method.id} className={`border rounded-xl p-5 relative group shadow-sm transition-colors ${isDefault ? 'border-green-700 bg-green-700/10 border-2' : `${theme.border} ${theme.surface} hover:border-green-700/30 ${theme.surfaceHover}`}`}>
+      <div key={method.id} onClick={() => onSelect(method.id)} className={`border rounded-xl p-5 relative group shadow-sm transition-colors ${isDefault ? 'border-green-700 bg-green-700/10 border-2' : `${theme.border} ${theme.surface} hover:border-green-700/30 ${theme.surfaceHover}`}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className={`${isDefault ? theme.surface : theme.background} p-2 rounded-md shadow-sm border ${theme.border}`}>
@@ -57,8 +66,18 @@ const CreditCardStrategy: PaymentRenderStrategy = {
         </div>
         
         <div className="absolute top-4 right-4 flex opacity-0 group-hover:opacity-100 transition-opacity gap-2">
-            <button className={`p-1.5 text-gray-400 hover:text-green-700 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}><Edit2 className="w-4 h-4" /></button>
-            <button className={`p-1.5 text-gray-400 hover:text-red-500 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}><Trash2 className="w-4 h-4" /></button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(method); }}
+              className={`p-1.5 text-gray-400 hover:text-green-700 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(method.id); }}
+              className={`p-1.5 text-gray-400 hover:text-red-500 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
         </div>
       </div>
     );
@@ -66,12 +85,12 @@ const CreditCardStrategy: PaymentRenderStrategy = {
 };
 
 const PayPalStrategy: PaymentRenderStrategy = {
-  render: (method, cardholder, theme, isDarkMode) => {
+  render: (method, cardholder, theme, isDarkMode, onSelect, onEdit, onDelete) => {
     const { email } = method.details;
     const isDefault = method.isDefault;
     
     return (
-      <div key={method.id} className={`border rounded-xl p-5 relative group shadow-sm transition-colors ${isDefault ? 'border-green-700 bg-green-700/10 border-2' : `${theme.border} ${theme.surface} hover:border-green-700/30 ${theme.surfaceHover}`}`}>
+      <div key={method.id} onClick={() => onSelect(method.id)} className={`border rounded-xl p-5 relative group shadow-sm transition-colors ${isDefault ? 'border-green-700 bg-green-700/10 border-2' : `${theme.border} ${theme.surface} hover:border-green-700/30 ${theme.surfaceHover}`}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
              <div className={`${isDefault ? theme.surface : theme.background} p-2 rounded-md shadow-sm border ${theme.border}`}>
@@ -89,7 +108,18 @@ const PayPalStrategy: PaymentRenderStrategy = {
         </div>
         
         <div className="absolute top-4 right-4 flex opacity-0 group-hover:opacity-100 transition-opacity gap-2">
-            <button className={`p-1.5 text-gray-400 hover:text-red-500 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}><Trash2 className="w-4 h-4" /></button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(method); }}
+              className={`p-1.5 text-gray-400 hover:text-green-700 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(method.id); }}
+              className={`p-1.5 text-gray-400 hover:text-red-500 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
         </div>
       </div>
     );
@@ -97,12 +127,12 @@ const PayPalStrategy: PaymentRenderStrategy = {
 };
 
 const BankTransferStrategy: PaymentRenderStrategy = {
-  render: (method, cardholder, theme, isDarkMode) => {
+  render: (method, cardholder, theme, isDarkMode, onSelect, onEdit, onDelete) => {
     const { bankName, accountLast4 } = method.details;
     const isDefault = method.isDefault;
     
     return (
-      <div key={method.id} className={`border rounded-xl p-5 relative group shadow-sm transition-colors ${isDefault ? 'border-green-700 bg-green-700/10 border-2' : `${theme.border} ${theme.surface} hover:border-green-700/30 ${theme.surfaceHover}`}`}>
+      <div key={method.id} onClick={() => onSelect(method.id)} className={`border rounded-xl p-5 relative group shadow-sm transition-colors ${isDefault ? 'border-green-700 bg-green-700/10 border-2' : `${theme.border} ${theme.surface} hover:border-green-700/30 ${theme.surfaceHover}`}`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
              <div className={`${isDefault ? theme.surface : theme.background} p-2 rounded-md shadow-sm border ${theme.border}`}>
@@ -123,7 +153,18 @@ const BankTransferStrategy: PaymentRenderStrategy = {
         </div>
         
         <div className="absolute top-4 right-4 flex opacity-0 group-hover:opacity-100 transition-opacity gap-2">
-            <button className={`p-1.5 text-gray-400 hover:text-red-500 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}><Trash2 className="w-4 h-4" /></button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(method); }}
+              className={`p-1.5 text-gray-400 hover:text-green-700 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(method.id); }}
+              className={`p-1.5 text-gray-400 hover:text-red-500 ${theme.surfaceHover} rounded-lg transition-colors shadow-sm`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
         </div>
       </div>
     );
@@ -156,6 +197,12 @@ export default function ProfilePage() {
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Payment Methods State
+  const { payments, setPayments } = usePayment();
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<PaymentMethodData | null>(null);
+
 
   const router = useRouter();
 
@@ -244,6 +291,57 @@ export default function ProfilePage() {
   const displayRole = user?.user_metadata?.role === 'seller' ? 'Premium Seller' : 'Premium Member';
 
   const tabs = ['Personal Info', 'Addresses', 'Payment Methods', 'Order History', 'Preferences'];
+
+  const handleSelectPayment = (id: string) => {
+    setPayments(prev => prev.map(p => ({
+      ...p,
+      isDefault: p.id === id
+    })));
+  };
+
+  const handleDeletePayment = (id: string) => {
+    setPayments(prev => prev.filter(p => p.id !== id));
+  };
+
+    const handleEditPayment = (method: PaymentMethodData) => {
+    // Create a shallow copy so we don't mutate the saved state directly while typing
+    setEditingPayment({ ...method }); 
+  };
+
+  const handeAddNew = (type: PaymentType) => {
+    setShowAddMenu(false);
+    // Scaffold a new method, but DON'T add it to the payments array yet
+    const newId = Date.now().toString();
+    const newMethod: PaymentMethodData = {
+      id: newId,
+      type,
+      isDefault: payments.length === 0,
+      details: type === 'credit_card' ? { brand: '', last4: '', exp: '' } 
+             : type === 'paypal' ? { email: '' } 
+             : { bankName: '', accountLast4: '' }
+    };
+    
+    setEditingPayment(newMethod);
+  };
+
+  const handleSavePayment = () => {
+    if (!editingPayment) return;
+    
+    setPayments(prev => {
+      // Check if this payment already exists
+      const exists = prev.find(p => p.id === editingPayment.id);
+      if (exists) {
+        // Update existing
+        return prev.map(p => p.id === editingPayment.id ? editingPayment : p);
+      } else {
+        // Add new
+        return [...prev, editingPayment];
+      }
+    });
+    
+    setEditingPayment(null); // Close the modal
+  };
+
 
   return (
     <div className={`flex h-screen ${theme.background} font-sans transition-colors duration-300`}>
@@ -509,22 +607,53 @@ export default function ProfilePage() {
 
               {/* Payment Methods */}
               {activeTab === 'Payment Methods' && (
-                <div className={`${theme.surface} rounded-2xl p-6 shadow-sm border ${theme.border} mt-2 animate-in fade-in duration-300 transition-colors duration-300`}>
-                   <div className={`flex items-start justify-between mb-6 border-b ${theme.border} pb-4`}>
+                <div className={`${theme.surface} rounded-2xl p-6 shadow-sm border ${theme.border} mt-2 animate-in fade-in duration-300 transition-colors duration-300 relative`}>
+                  <div className={`flex items-start justify-between mb-6 border-b ${theme.border} pb-4`}>
                     <div>
                       <h2 className={`text-xl font-bold ${theme.textPrimary} mb-1`}>Payment Methods</h2>
                       <p className={`text-sm ${theme.textSecondary} font-medium`}>Manage your saved credit cards and billing methods.</p>
                     </div>
-                    <button className={`px-5 py-2 rounded-lg text-sm font-bold ${theme.textPrimary} ${theme.background} hover:${theme.surfaceHover} shadow-sm flex items-center gap-2 transition-colors border ${theme.border}`}>
-                      <Plus className={`w-4 h-4 ${theme.textSecondary}`} />
-                      Add New Payment
-                    </button>
+                    
+                    {/* Add New Payment with Dropdown */}
+                    <div className="relative">
+                      <button 
+                        onClick={() => setShowAddMenu(!showAddMenu)}
+                        className={`px-5 py-2 rounded-lg text-sm font-bold ${theme.textPrimary} ${theme.background} hover:${theme.surfaceHover} shadow-sm flex items-center gap-2 transition-colors border ${theme.border}`}
+                      >
+                        <Plus className={`w-4 h-4 ${theme.textSecondary}`} />
+                        Add New Payment
+                      </button>
+
+                      {showAddMenu && (
+                        <div className={`absolute right-0 mt-2 w-48 rounded-xl shadow-lg border ${theme.border} ${theme.surface} overflow-hidden z-10`}>
+                          {Object.keys(paymentStrategies).map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => handeAddNew(type as PaymentType)}
+                              className={`w-full text-left px-4 py-3 text-sm font-medium ${theme.textPrimary} hover:${theme.surfaceHover} transition-colors capitalize`}
+                            >
+                              Add {type.replace('_', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {mockPaymentMethods.map(method => {
+                    {payments.map(method => {
                       const strategy = paymentStrategies[method.type];
-                      return strategy ? strategy.render(method, displayUsername, theme, isDarkMode) : null;
+                      return strategy 
+                        ? strategy.render(
+                            method, 
+                            displayUsername, 
+                            theme, 
+                            isDarkMode, 
+                            handleSelectPayment, 
+                            handleEditPayment, 
+                            handleDeletePayment
+                          ) 
+                        : null;
                     })}
                   </div>
                 </div>
@@ -585,6 +714,118 @@ export default function ProfilePage() {
           </div>
           
         </div>
+        {/* Payment Edit Modal Overlay */}
+      {editingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity">
+          <div className={`${theme.surface} border ${theme.border} rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200`}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className={`text-xl font-bold ${theme.textPrimary}`}>
+                {payments.some(p => p.id === editingPayment.id) ? 'Edit' : 'Add'} Payment Method
+              </h2>
+            </div>
+            
+            {/* Dynamic Form Fields Based on Strategy Type */}
+            <div className="space-y-5">
+              
+              {/* Credit Card Fields */}
+              {editingPayment.type === 'credit_card' && (
+                <>
+                  <div>
+                    <label className={`block text-xs font-bold ${theme.textSecondary} uppercase tracking-widest mb-2`}>Card Brand</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Visa, Mastercard"
+                      className={`w-full ${theme.background} border ${theme.border} rounded-xl px-4 py-3 ${theme.textPrimary} font-bold focus:outline-none focus:ring-2 focus:ring-green-700 transition-colors`}
+                      value={editingPayment.details.brand}
+                      onChange={(e) => setEditingPayment({...editingPayment, details: {...editingPayment.details, brand: e.target.value}})}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={`block text-xs font-bold ${theme.textSecondary} uppercase tracking-widest mb-2`}>Last 4 Digits</label>
+                      <input 
+                        type="text" 
+                        maxLength={4}
+                        placeholder="1234"
+                        className={`w-full ${theme.background} border ${theme.border} rounded-xl px-4 py-3 ${theme.textPrimary} font-bold focus:outline-none focus:ring-2 focus:ring-green-700 transition-colors`}
+                        value={editingPayment.details.last4}
+                        onChange={(e) => setEditingPayment({...editingPayment, details: {...editingPayment.details, last4: e.target.value}})}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-xs font-bold ${theme.textSecondary} uppercase tracking-widest mb-2`}>Expiry Date</label>
+                      <input 
+                        type="text" 
+                        placeholder="MM/YY"
+                        className={`w-full ${theme.background} border ${theme.border} rounded-xl px-4 py-3 ${theme.textPrimary} font-bold focus:outline-none focus:ring-2 focus:ring-green-700 transition-colors`}
+                        value={editingPayment.details.exp}
+                        onChange={(e) => setEditingPayment({...editingPayment, details: {...editingPayment.details, exp: e.target.value}})}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* PayPal Fields */}
+              {editingPayment.type === 'paypal' && (
+                <div>
+                  <label className={`block text-xs font-bold ${theme.textSecondary} uppercase tracking-widest mb-2`}>PayPal Email Address</label>
+                  <input 
+                    type="email" 
+                    placeholder="user@example.com"
+                    className={`w-full ${theme.background} border ${theme.border} rounded-xl px-4 py-3 ${theme.textPrimary} font-bold focus:outline-none focus:ring-2 focus:ring-green-700 transition-colors`}
+                    value={editingPayment.details.email}
+                    onChange={(e) => setEditingPayment({...editingPayment, details: {...editingPayment.details, email: e.target.value}})}
+                  />
+                </div>
+              )}
+
+              {/* Bank Transfer Fields */}
+              {editingPayment.type === 'bank_transfer' && (
+                <>
+                  <div>
+                    <label className={`block text-xs font-bold ${theme.textSecondary} uppercase tracking-widest mb-2`}>Bank Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Chase, Bank of America"
+                      className={`w-full ${theme.background} border ${theme.border} rounded-xl px-4 py-3 ${theme.textPrimary} font-bold focus:outline-none focus:ring-2 focus:ring-green-700 transition-colors`}
+                      value={editingPayment.details.bankName}
+                      onChange={(e) => setEditingPayment({...editingPayment, details: {...editingPayment.details, bankName: e.target.value}})}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-bold ${theme.textSecondary} uppercase tracking-widest mb-2`}>Account Last 4 Digits</label>
+                    <input 
+                      type="text" 
+                      maxLength={4}
+                      placeholder="1234"
+                      className={`w-full ${theme.background} border ${theme.border} rounded-xl px-4 py-3 ${theme.textPrimary} font-bold focus:outline-none focus:ring-2 focus:ring-green-700 transition-colors`}
+                      value={editingPayment.details.accountLast4}
+                      onChange={(e) => setEditingPayment({...editingPayment, details: {...editingPayment.details, accountLast4: e.target.value}})}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className={`flex justify-end gap-3 mt-8 pt-5 border-t ${theme.border}`}>
+              <button 
+                onClick={() => setEditingPayment(null)}
+                className={`px-5 py-2 rounded-xl text-sm font-bold ${theme.textSecondary} hover:${theme.textPrimary} border ${theme.border} transition-colors`}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSavePayment}
+                className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-green-800 hover:bg-green-900 shadow-sm transition-colors"
+              >
+                Save Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </main>
     </div>
   );

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ProductCard } from '@/components/ProductCard';
 import { useAuth } from '@/context/AuthContext';
+import { usePayment } from '@/context/PaymentContext';
 
 // ==========================================
 // 1. TYPES & MOCK DATA
@@ -85,6 +86,7 @@ export default function MarketplacePage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [toastMessage, setToastMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
+  const { payments } = usePayment();
   
   // --- ADD ITEM MODAL STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -349,6 +351,17 @@ const handleCheckoutCart = async () => {
     return shuffled.slice(0, 4);
   }, [products]);
 
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
+  payments.find(p => p.isDefault)?.id || (payments.length > 0 ? payments[0].id : '')
+);
+
+// Add an effect to keep the default synced in case the context list changes
+useEffect(() => {
+  if (payments.length > 0 && !payments.find(p => p.id === selectedPaymentId)) {
+     setSelectedPaymentId(payments.find(p => p.isDefault)?.id || payments[0].id);
+  }
+}, [payments, selectedPaymentId]);
+
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>
       
@@ -446,7 +459,34 @@ const handleCheckoutCart = async () => {
             </div>
 
             {cart.length > 0 && (
-              <div className={`p-5 border-t ${theme.border} flex justify-between items-center bg-opacity-50`}>
+            <div className={`p-5 border-t ${theme.border} flex flex-col gap-4 bg-opacity-50`}>
+              
+              <div className="flex justify-between items-center">
+                <label className={`text-sm font-bold ${theme.textSecondary}`}>Payment Method</label>
+                <select 
+                  value={selectedPaymentId}
+                  onChange={(e) => setSelectedPaymentId(e.target.value)}
+                  className={`bg-transparent border ${theme.border} rounded-lg p-2 ${theme.textPrimary} text-sm focus:ring-2 focus:ring-green-600 outline-none`}
+                  disabled={payments.length === 0}
+                >
+                  {payments.length === 0 && <option value="">No payments saved</option>}
+                  {payments.map(method => {
+                    // Quick helper to make the label look nice
+                    let label = '';
+                    if (method.type === 'credit_card') label = `${method.details.brand} •••• ${method.details.last4}`;
+                    if (method.type === 'paypal') label = `PayPal (${method.details.email})`;
+                    if (method.type === 'bank_transfer') label = `${method.details.bankName} •••• ${method.details.accountLast4}`;
+                    
+                    return (
+                      <option key={method.id} value={method.id} className={`${theme.background} ${theme.textPrimary}`}>
+                        {label} {method.isDefault ? '(Default)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              
+              <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <span className={`text-xs font-bold ${theme.textSecondary} uppercase`}>Subtotal</span>
                   <span className={`text-xl font-black ${theme.textPrimary}`}>
@@ -455,13 +495,14 @@ const handleCheckoutCart = async () => {
                 </div>
                 <button 
                   onClick={handleCheckoutCart}
-                  disabled={isCheckingOut}
-                  className="px-6 py-2.5 rounded-lg font-bold text-sm text-white bg-green-700 hover:bg-green-800 transition-colors shadow-md flex items-center gap-2 disabled:bg-gray-400"
+                  disabled={isCheckingOut || payments.length === 0}
+                  className="px-6 py-2.5 rounded-lg font-bold text-sm text-white bg-green-700 hover:bg-green-800 transition-colors shadow-md flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {isCheckingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Checkout'}
                 </button>
               </div>
-            )}
+            </div>
+          )}
           </div>
         </div>
       )}
