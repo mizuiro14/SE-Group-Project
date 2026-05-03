@@ -5,15 +5,17 @@ import { Search, Bell, ShoppingCart } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext';
 
 interface DashboardHeaderProps {
-  // Optional: Allow pages to override the search placeholder text
   searchPlaceholder?: string;
-  // Optional: A callback if you need to actually do something with the search input
   onSearchChange?: (value: string) => void;
+  cartCount?: number;          
+  onCartClick?: () => void;    
 }
 
 export default function DashboardHeader({ 
   searchPlaceholder = "Search...", 
-  onSearchChange 
+  onSearchChange,
+  cartCount = 0,
+  onCartClick 
 }: DashboardHeaderProps) {
   
   const { theme } = useTheme();
@@ -42,11 +44,13 @@ export default function DashboardHeader({
         </button>
 
         {/* Shopping Cart */}
-        <button className={`relative p-2 ${theme.background} rounded-full ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`}>
+        <button className={`relative p-2 ${theme.background} rounded-full ${theme.textSecondary} hover:${theme.surfaceHover} transition-colors`} onClick={onCartClick}>
           <ShoppingCart className="w-5 h-5" />
-          <span className="absolute -top-1 -right-1 bg-green-800 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
-            3
-          </span>
+          {cartCount > 0 && ( // <--- Add this conditional wrapper
+            <span className="absolute -top-1 -right-1 bg-green-800 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+              {cartCount}
+            </span>
+          )}
         </button>
 
       </div>

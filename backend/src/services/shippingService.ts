@@ -13,20 +13,32 @@ export const getAllShippings = async (filters?: { status?: string; order_id?: nu
 
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
-    return data || [];
+    
+    // Explicitly add 'any' type to 'item' to fix TypeScript error
+    return (data || []).map((item: any) => ({
+        ...item,
+        status: item.status?.replace(/['"]/g, '') // Strips out accidental quotes
+    }));
 };
 
 export const getShippingById = async (id: number): Promise<Shipping> => {
     const { data, error } = await supabase.from('shipping').select('*').eq('id', id).single();
     if (error) throw new Error(error.message);
     if (!data) throw new Error('Shipping not found');
+    
+    data.status = data.status?.replace(/['"]/g, '');
     return data;
 };
 
 export const getShippingByOrderId = async (orderId: number): Promise<Shipping[]> => {
     const { data, error } = await supabase.from('shipping').select('*').eq('order_id', orderId).order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
-    return data || [];
+    
+    // Explicitly add 'any' type to 'item' here too
+    return (data || []).map((item: any) => ({
+        ...item,
+        status: item.status?.replace(/['"]/g, '')
+    }));
 };
 
 export const createShipping = async (payload: CreateShippingRequest): Promise<Shipping> => {
@@ -36,6 +48,7 @@ export const createShipping = async (payload: CreateShippingRequest): Promise<Sh
             {
                 order_id: payload.order_id,
                 address: payload.address,
+                status: 'pending' // Explicitly sets raw string instead of taking undefined or quoted payloads
             },
         ])
         .select()
@@ -47,9 +60,18 @@ export const createShipping = async (payload: CreateShippingRequest): Promise<Sh
 };
 
 export const updateShipping = async (id: number, updates: UpdateShippingRequest): Promise<Shipping> => {
+    // If the frontend accidentally sends quotes, clean it up before updating
+    const cleanedStatus = updates.status?.replace(/['"]/g, '');
+    
+    const payloadToUpdate = {
+         ...updates,
+         ...(cleanedStatus ? { status: cleanedStatus } : {}),
+         updated_at: new Date().toISOString()
+    };
+
     const { data, error } = await supabase
         .from('shipping')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update(payloadToUpdate)
         .eq('id', id)
         .select()
         .single();

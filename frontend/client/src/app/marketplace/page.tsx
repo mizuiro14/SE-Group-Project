@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ProductCard } from '@/components/ProductCard';
 import { useAuth } from '@/context/AuthContext';
+import { usePayment } from '@/context/PaymentContext';
 
 // ==========================================
 // 1. TYPES & MOCK DATA
@@ -63,6 +64,11 @@ class CategoryFilter extends FilterDecorator {
     return previousFiltered.filter(p => this.selectedCategories.includes(p.category));
   }
 }
+interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
 
 // ==========================================
 // 3. MAIN COMPONENT
@@ -70,12 +76,17 @@ class CategoryFilter extends FilterDecorator {
 export default function MarketplacePage() {
   const { theme, isDarkMode } = useTheme();
   const { isSeller, user } = useAuth(); 
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartModalOpen, setIsCartModalOpen] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   // --- STATE ---
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const [toastMessage, setToastMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
+  const { payments } = usePayment();
   
   // --- ADD ITEM MODAL STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -157,6 +168,11 @@ export default function MarketplacePage() {
     );
   };
 
+const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+  setToastMessage({ text, type });
+  setTimeout(() => setToastMessage(null), 3000);
+};
+
   // Add Item Logic
   const handleAddNewItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +238,7 @@ export default function MarketplacePage() {
 
     } catch (err) {
        console.error("Failed to list item globally", err);
+       showToast("Failed to list item globally", "error");
     }
   };
 
@@ -232,65 +249,87 @@ export default function MarketplacePage() {
   };
 
   // Process the Purchase and Decrement Stock
-  const handleConfirmPurchase = async () => {
-    if (!productToBuy) return;
+  // Add item to cart
+  const handleAddToCart = () => {
+  if (!productToBuy) return;
+  if (purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock) {
+      showToast("Please enter a valid quantity.", "error"); // Replced alert!
+      return;
+  }
+
+  setCart(prevCart => {
+    const existingItemIndex = prevCart.findIndex(item => item.product.id === productToBuy.id);
+    if (existingItemIndex >= 0) {
+      const updatedCart = [...prevCart];
+      updatedCart[existingItemIndex] = {
+        ...updatedCart[existingItemIndex],
+        quantity: updatedCart[existingItemIndex].quantity + purchaseQuantity
+      };
+      return updatedCart;
+    }
+    return [...prevCart, { product: productToBuy, quantity: purchaseQuantity }];
+  });
+
+  showToast(`Added ${purchaseQuantity} of ${productToBuy.name} to your cart!`, "success"); // Replaced alert!
+  
+  setProductToBuy(null); 
+  setSelectedProduct(null);
+};
+
+const handleCheckoutCart = async () => {
+  if (cart.length === 0) return;
+  setIsCheckingOut(true);
+
+  try {
+    // 1. Format the data EXACTLY how the Express backend expects it
+    const orderPayload = {
+      // Send the email so the backend can look up the correct numeric ID
+      email: user?.email, 
+      items: cart.map(item => ({
+        product_id: Number(item.product.id), 
+        quantity: item.quantity,
+        unit_price: item.product.price
+      })),
+      status: 'pending' 
+    };
+
+    // 2. Create the Order (which also creates the Order Items natively)
+    const orderResponse = await fetch('http://localhost:5000/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderPayload)
+    });
     
-    if (purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock) {
-        alert("Please enter a valid quantity.");
-        return;
+    if (!orderResponse.ok) {
+       // Catch the real error message from the backend so we can see it
+       const errData = await orderResponse.json().catch(() => ({}));
+       throw new Error(errData.error || "Failed to create order");
+    }
+    
+    // We don't need the manual order_items API loop anymore! 
+    
+    // 3. Deduct stock from the products table (this is all we have left to do)
+    for (const item of cart) {
+      const remainingStock = item.product.rawStock - item.quantity;
+      await fetch(`http://localhost:5000/api/products/${item.product.id}/quantity`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: remainingStock })
+      });
     }
 
-    setIsPurchasing(true);
-
-    try {
-        const remainingStock = productToBuy.rawStock - purchaseQuantity;
-
-        // Call our backend to deduct the stock
-        const response = await fetch(`http://localhost:5000/api/products/${productToBuy.id}/quantity`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ quantity: remainingStock })
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to complete purchase');
-        }
-
-        // Recompute the status based on the remaining stock
-        let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
-        if (remainingStock > 30) computedStatus = 'In Stock';
-        else if (remainingStock > 0) computedStatus = 'Low Stock';
-
-        // Visually update the product in our list without a full page refresh
-        setProducts(prevProducts => prevProducts.map(p => {
-             if (p.id === productToBuy.id) {
-                 return {
-                     ...p,
-                     rawStock: remainingStock,
-                     status: computedStatus,
-                     stockText: `${remainingStock} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`
-                 }
-             }
-             return p;
-        }));
-        
-        // Let the user know they succeeded
-        alert(`Successfully purchased ${purchaseQuantity} of ${productToBuy.name}!`);
-
-        // Clean up both modals
-        setProductToBuy(null);
-        setSelectedProduct(null);
-        
-    } catch (err: any) {
-        console.error(err);
-        alert(err.message || 'An error occurred during purchase.');
-    } finally {
-        setIsPurchasing(false);
-    }
-  };
+    showToast("Checkout successful!", "success"); 
+    setCart([]); 
+    setIsCartModalOpen(false);
+    
+  } catch (err: any) {
+    console.error(err);
+    // This will now show the actual text coming from the Express backend
+    showToast(err.message || 'An error occurred during checkout.', "error");
+  } finally {
+    setIsCheckingOut(false);
+  }
+};
 
   // Apply the decorator pattern filtering using our state variables
   const filteredProducts = useMemo(() => {
@@ -311,6 +350,17 @@ export default function MarketplacePage() {
     // Return up to 4
     return shuffled.slice(0, 4);
   }, [products]);
+
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
+  payments.find(p => p.isDefault)?.id || (payments.length > 0 ? payments[0].id : '')
+);
+
+// Add an effect to keep the default synced in case the context list changes
+useEffect(() => {
+  if (payments.length > 0 && !payments.find(p => p.id === selectedPaymentId)) {
+     setSelectedPaymentId(payments.find(p => p.isDefault)?.id || payments[0].id);
+  }
+}, [payments, selectedPaymentId]);
 
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>
@@ -352,7 +402,7 @@ export default function MarketplacePage() {
                          Cancel
                     </button>
                     <button 
-                         onClick={handleConfirmPurchase}
+                         onClick={handleAddToCart}
                          disabled={isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock}
                          className={`px-6 py-2.5 rounded-lg font-bold text-sm text-white flex items-center gap-2 transition-all ${
                             isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock
@@ -361,10 +411,98 @@ export default function MarketplacePage() {
                          }`}
                     >
                          {isPurchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                         Confirm Buy
+                         Add to Cart
                     </button>
                 </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- SHOPPING CART MODAL ----------------- */}
+      {isCartModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className={`${theme.surface} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh] border ${theme.border}`}>
+            <div className={`p-5 border-b ${theme.border} flex justify-between items-center`}>
+              <h3 className={`text-xl font-bold flex items-center gap-2 ${theme.textPrimary}`}>
+                <ShoppingCart className="w-5 h-5 text-green-600" /> Your Cart
+              </h3>
+              <button onClick={() => setIsCartModalOpen(false)} className={`p-1.5 rounded-md ${theme.textSecondary} hover:${theme.surfaceHover} outline-none`}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-5">
+              {cart.length === 0 ? (
+                <div className="text-center py-10">
+                  <ShoppingCart className={`w-12 h-12 ${theme.textSecondary} opacity-20 mx-auto mb-3`} />
+                  <p className={`text-sm ${theme.textSecondary}`}>Your cart is totally empty!</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {cart.map((item, idx) => (
+                    <div key={idx} className={`flex items-center justify-between border-b ${theme.border} pb-4 last:border-0 last:pb-0`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-12 h-12 rounded bg-gray-100 flex items-center justify-center font-bold ${theme.textPrimary}`}>
+                          {item.product.imageLetter}
+                        </div>
+                        <div>
+                          <h4 className={`font-bold ${theme.textPrimary} text-sm`}>{item.product.name}</h4>
+                          <span className={`text-xs ${theme.textSecondary}`}>Qty: {item.quantity}</span>
+                        </div>
+                      </div>
+                      <span className={`font-bold text-sm ${theme.textPrimary}`}>${(item.quantity * item.product.price).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {cart.length > 0 && (
+            <div className={`p-5 border-t ${theme.border} flex flex-col gap-4 bg-opacity-50`}>
+              
+              <div className="flex justify-between items-center">
+                <label className={`text-sm font-bold ${theme.textSecondary}`}>Payment Method</label>
+                <select 
+                  value={selectedPaymentId}
+                  onChange={(e) => setSelectedPaymentId(e.target.value)}
+                  className={`bg-transparent border ${theme.border} rounded-lg p-2 ${theme.textPrimary} text-sm focus:ring-2 focus:ring-green-600 outline-none`}
+                  disabled={payments.length === 0}
+                >
+                  {payments.length === 0 && <option value="">No payments saved</option>}
+                  {payments.map(method => {
+                    // Quick helper to make the label look nice
+                    let label = '';
+                    if (method.type === 'credit_card') label = `${method.details.brand} •••• ${method.details.last4}`;
+                    if (method.type === 'paypal') label = `PayPal (${method.details.email})`;
+                    if (method.type === 'bank_transfer') label = `${method.details.bankName} •••• ${method.details.accountLast4}`;
+                    
+                    return (
+                      <option key={method.id} value={method.id} className={`${theme.background} ${theme.textPrimary}`}>
+                        {label} {method.isDefault ? '(Default)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className={`text-xs font-bold ${theme.textSecondary} uppercase`}>Subtotal</span>
+                  <span className={`text-xl font-black ${theme.textPrimary}`}>
+                    ${cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0).toFixed(2)}
+                  </span>
+                </div>
+                <button 
+                  onClick={handleCheckoutCart}
+                  disabled={isCheckingOut || payments.length === 0}
+                  className="px-6 py-2.5 rounded-lg font-bold text-sm text-white bg-green-700 hover:bg-green-800 transition-colors shadow-md flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isCheckingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Checkout'}
+                </button>
+              </div>
+            </div>
+          )}
           </div>
         </div>
       )}
@@ -441,6 +579,15 @@ export default function MarketplacePage() {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* ----------------- TOAST NOTIFICATION ----------------- */}
+      {toastMessage && (
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-3 rounded-lg shadow-xl font-bold text-white animate-in slide-in-from-bottom-5 duration-300 ${
+          toastMessage.type === 'error' ? 'bg-red-600' : 'bg-green-700'
+        }`}>
+          {toastMessage.text}
         </div>
       )}
 
@@ -588,8 +735,12 @@ export default function MarketplacePage() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-hidden">
         
-        {/* TOP NAVBAR */}
-        <DashboardHeader searchPlaceholder="Search marketplace products..." />
+      {/* TOP NAVBAR */}
+      <DashboardHeader 
+        searchPlaceholder="Search marketplace products..." 
+        cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
+        onCartClick={() => setIsCartModalOpen(true)}
+      />
 
         {/* CONTENT */}
         <div className="flex-1 overflow-auto p-8">
