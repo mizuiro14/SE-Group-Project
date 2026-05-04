@@ -39,11 +39,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         // --- NEW COOKIE LOGIC ---
         // Securely attach the token as an HTTP-only cookie
         if (data.session) {
-            res.cookie('access_token', data.session.access_token, {
-                httpOnly: true, // Prevents JavaScript/XSS attacks from reading the cookie
-                secure: process.env.NODE_ENV === 'production', // Uses HTTPS in production
-                sameSite: 'lax',
-                maxAge: 3600 * 1000 // Expires in 1 hour
+            res.clearCookie('access_token', {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'none'
             });
         }
 
