@@ -1,4 +1,4 @@
-import { IPaymentStrategy, PaymentMethod } from '../types/payment';
+import { IPaymentStrategy, PaymentType } from '../types/payment';
 import {
     CreditCardPaymentStrategy,
     PayPalPaymentStrategy,
@@ -10,25 +10,25 @@ import {
  * Factory for creating payment strategy instances
  */
 export class PaymentStrategyFactory {
-    static createStrategy(method: PaymentMethod): IPaymentStrategy {
-        switch (method) {
-            case PaymentMethod.CREDIT_CARD:
+    static createStrategy(type: PaymentType): IPaymentStrategy {
+        switch (type) {
+            case PaymentType.CREDIT_CARD:
                 return new CreditCardPaymentStrategy();
-            case PaymentMethod.DEBIT_CARD:
+            case PaymentType.DEBIT_CARD:
                 // Debit card uses similar logic to credit card
                 return new CreditCardPaymentStrategy();
-            case PaymentMethod.PAYPAL:
+            case PaymentType.PAYPAL:
                 return new PayPalPaymentStrategy();
-            case PaymentMethod.BANK_TRANSFER:
+            case PaymentType.BANK_TRANSFER:
                 return new BankTransferPaymentStrategy();
-            case PaymentMethod.WALLET:
+            case PaymentType.WALLET:
                 return new WalletPaymentStrategy();
             default:
-                throw new Error(`Unsupported payment method: ${method}`);
+                throw new Error(`Unsupported payment type: ${type}`);
         }
     }
 
-    static getSupportedMethods(): PaymentMethod[] {
-        return Object.values(PaymentMethod);
+    static getSupportedTypes(): PaymentType[] {
+        return Object.values(PaymentType);
     }
 }

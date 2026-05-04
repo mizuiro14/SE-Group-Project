@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PaymentService } from '../services/paymentService';
-import { PaymentMethod } from '../types/payment';
+import { PaymentType } from '../types/payment';
 
 const parsePositiveInteger = (value: unknown): number | null => {
     if (typeof value !== 'string') {
@@ -22,67 +22,64 @@ const isPositiveNumber = (value: unknown): value is number => {
 const isPaymentValidationError = (error: unknown): boolean => {
     return error instanceof Error && (
         error.message.includes('Invalid payment details') ||
-        error.message.includes('Unsupported payment method')
+        error.message.includes('Unsupported payment type')
     );
 };
 
 export const createPayment = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { order_id, amount, method, metadata } = req.body;
+        const { user_id, type, is_default, details } = req.body;
 
         // Validate required fields
-        if (order_id === undefined || amount === undefined || method === undefined) {
+        if (user_id === undefined || type === undefined || details === undefined) {
             res.status(400).json({
                 success: false,
-                message: 'Missing required fields: order_id, amount, method'
+                message: 'Missing required fields: user_id, type, details'
             });
             return;
         }
 
-        if (!isPositiveNumber(order_id) || !isPositiveNumber(amount)) {
+        if (!isPositiveNumber(user_id)) {
             res.status(400).json({
                 success: false,
-                message: 'order_id and amount must be positive numbers'
+                message: 'user_id must be a positive number'
             });
             return;
         }
 
-        // Validate payment method
-        if (typeof method !== 'string' || !Object.values(PaymentMethod).includes(method as PaymentMethod)) {
+        // Validate payment type
+        if (typeof type !== 'string' || !Object.values(PaymentType).includes(type as PaymentType)) {
             res.status(400).json({
                 success: false,
-                message: `Invalid payment method. Supported methods: ${Object.values(PaymentMethod).join(', ')}`
+                message: `Invalid payment type. Supported types: ${Object.values(PaymentType).join(', ')}`
             });
             return;
         }
 
-        // Process payment
-        const result = await PaymentService.processPayment({
-            order_id,
-            amount,
-            method: method as PaymentMethod,
-            metadata
+        // Create payment method
+        const payment = await PaymentService.createPaymentMethod({
+            user_id,
+            type: type as PaymentType,
+            is_default,
+            details
         });
 
         res.status(200).json({
-            success: result.response.success,
-            payment_id: result.payment.id,
-            status: result.payment.status,
-            message: result.response.message,
-            transaction_id: result.response.transaction_id
+            success: true,
+            payment
         });
     } catch (error) {
         if (isPaymentValidationError(error)) {
             res.status(400).json({
                 success: false,
-                message: `Error creating payment: ${error instanceof Error ? error.message : 'Invalid payment request'}`
+                message: `Error creating payment method: ${error instanceof Error ? error.message : 'Invalid payment request'}`
             });
             return;
         }
 
         res.status(500).json({
             success: false,
-            message: `Error creating payment: ${error instanceof Error ? error.message : 'Unknown error'}`
+            message: `Error creating payment method: ${error instanceof Error ? error.message : 'Unknown error'}`
         });
     }
 };
@@ -114,20 +111,20 @@ export const getPaymentById = async (req: Request, res: Response): Promise<void>
     }
 };
 
-export const getPaymentsByOrderId = async (req: Request, res: Response): Promise<void> => {
+export const getPaymentsByUserId = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { orderId } = req.params;
+        const { userId } = req.params;
 
-        const parsedOrderId = parsePositiveInteger(orderId);
-        if (parsedOrderId === null) {
+        const parsedUserId = parsePositiveInteger(userId);
+        if (parsedUserId === null) {
             res.status(400).json({
                 success: false,
-                message: 'Order ID must be a positive integer'
+                message: 'User ID must be a positive integer'
             });
             return;
         }
 
-        const payments = await PaymentService.getPaymentsByOrderId(parsedOrderId);
+        const payments = await PaymentService.getPaymentsByUserId(parsedUserId);
 
         res.status(200).json({
             success: true,
@@ -144,11 +141,14 @@ export const getPaymentsByOrderId = async (req: Request, res: Response): Promise
 
 export const getAllPayments = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { status, method, limit, offset } = req.query;
+        const { user_id, type, is_default, limit, offset } = req.query;
+        const parsedUserId = typeof user_id === 'string' ? Number.parseInt(user_id, 10) : undefined;
+        const parsedIsDefault = typeof is_default === 'string' ? is_default === 'true' : undefined;
 
         const filters = {
-            status: typeof status === 'string' ? status : undefined,
-            method: typeof method === 'string' ? method : undefined,
+            user_id: Number.isFinite(parsedUserId) ? parsedUserId : undefined,
+            type: typeof type === 'string' ? type : undefined,
+            is_default: parsedIsDefault,
             limit: limit && typeof limit === 'string' ? parseInt(limit) : undefined,
             offset: offset && typeof offset === 'string' ? parseInt(offset) : undefined
         };
@@ -168,7 +168,55 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
     }
 };
 
-export const refundPayment = async (req: Request, res: Response): Promise<void> => {
+export const updatePaymentMethod = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { type, is_default, details } = req.body;
+
+        const paymentId = parsePositiveInteger(id);
+        if (paymentId === null) {
+            res.status(400).json({
+                success: false,
+                message: 'Payment ID must be a positive integer'
+            });
+            return;
+        }
+
+        if (type !== undefined && (typeof type !== 'string' || !Object.values(PaymentType).includes(type as PaymentType))) {
+            res.status(400).json({
+                success: false,
+                message: `Invalid payment type. Supported types: ${Object.values(PaymentType).join(', ')}`
+            });
+            return;
+        }
+
+        const updated = await PaymentService.updatePaymentMethod(paymentId, {
+            type: type as PaymentType | undefined,
+            is_default,
+            details
+        });
+
+        res.status(200).json({
+            success: true,
+            payment: updated
+        });
+    } catch (error) {
+        if (isPaymentValidationError(error)) {
+            res.status(400).json({
+                success: false,
+                message: `Error updating payment method: ${error instanceof Error ? error.message : 'Unknown error'}`
+            });
+            return;
+        }
+
+        res.status(500).json({
+            success: false,
+            message: `Error updating payment method: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+    }
+};
+
+export const deletePaymentMethod = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
 
@@ -181,40 +229,15 @@ export const refundPayment = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
-        const result = await PaymentService.refundPayment(paymentId);
+        await PaymentService.deletePaymentMethod(paymentId);
 
         res.status(200).json({
-            success: result.response.success,
-            payment_id: result.payment.id,
-            status: result.payment.status,
-            message: result.response.message,
-            transaction_id: result.response.transaction_id
-        });
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: `Error refunding payment: ${error instanceof Error ? error.message : 'Unknown error'}`
-        });
-    }
-};
-
-export const getPaymentStatistics = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { startDate, endDate } = req.query;
-
-        const statistics = await PaymentService.getPaymentStatistics({
-            startDate: typeof startDate === 'string' ? startDate : undefined,
-            endDate: typeof endDate === 'string' ? endDate : undefined
-        });
-
-        res.status(200).json({
-            success: true,
-            statistics
+            success: true
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: `Error retrieving statistics: ${error instanceof Error ? error.message : 'Unknown error'}`
+            message: `Error deleting payment method: ${error instanceof Error ? error.message : 'Unknown error'}`
         });
     }
 };

@@ -1,5 +1,5 @@
 import { PaymentService } from '../services/paymentService';
-import { PaymentMethod } from '../types/payment';
+import { PaymentType } from '../types/payment';
 import { PaymentStrategyFactory } from '../strategies/paymentStrategyFactory';
 
 jest.mock('../SupabaseClient', () => {
@@ -23,59 +23,39 @@ describe('Payment Service Unit Tests', () => {
 
     beforeEach(() => { jest.clearAllMocks(); jest.restoreAllMocks(); });
 
-    it('processes a payment successfully (happy)', async () => {
-        const mockResponse = { success: true, status: 'completed', transaction_id: 'tx1', message: 'ok' };
-        const mockPaymentBefore = { id: 1, amount: 99.99, method: PaymentMethod.CREDIT_CARD, status: 'pending' } as any;
-        const mockPaymentAfter = { ...mockPaymentBefore, status: 'completed' } as any;
-
+    it('creates a payment method successfully (happy)', async () => {
+        const mockPayment = { id: 1, user_id: 10, type: PaymentType.CREDIT_CARD, is_default: true } as any;
         jest.spyOn(PaymentStrategyFactory, 'createStrategy').mockReturnValue({
-            validatePaymentDetails: jest.fn().mockResolvedValue(true),
-            processPayment: jest.fn().mockResolvedValue(mockResponse)
+            validateDetails: jest.fn().mockResolvedValue(true),
+            normalizeDetails: jest.fn().mockReturnValue({ cardLast4: '1111', expiryDate: '12/30', cvcPresent: true })
         } as any);
-        jest.spyOn(PaymentService, 'createPayment').mockResolvedValue(mockPaymentBefore as any);
-        jest.spyOn(PaymentService, 'updatePaymentStatus').mockResolvedValue(mockPaymentAfter as any);
+        supabase.__setResult({ data: mockPayment, error: null });
 
-        const result = await PaymentService.processPayment({
-            order_id: 1,
-            amount: 99.99,
-            method: PaymentMethod.CREDIT_CARD,
-            metadata: { cardNumber: '4111111111111111', expiryDate: '12/30', cvc: '123' }
+        const result = await PaymentService.createPaymentMethod({
+            user_id: 10,
+            type: PaymentType.CREDIT_CARD,
+            is_default: true,
+            details: { cardNumber: '4111111111111111', expiryDate: '12/30', cvc: '123' }
         } as any);
 
-        expect(result.response.success).toBe(true);
-        expect(result.payment.status).toBe('completed');
+        expect(result).toEqual(mockPayment);
     });
 
-    it('handles error when createPayment fails during processPayment', async () => {
+    it('fails to create payment method when details are invalid', async () => {
         jest.spyOn(PaymentStrategyFactory, 'createStrategy').mockReturnValue({
-            validatePaymentDetails: jest.fn().mockResolvedValue(true),
-            processPayment: jest.fn().mockResolvedValue({ success: true, status: 'completed', message: 'ok' })
+            validateDetails: jest.fn().mockResolvedValue(false),
+            normalizeDetails: jest.fn()
         } as any);
-        jest.spyOn(PaymentService, 'createPayment').mockRejectedValue(new Error('createPayment failed'));
-        await expect(PaymentService.processPayment({
-            order_id: 1,
-            amount: 10,
-            method: PaymentMethod.CREDIT_CARD,
-            metadata: { cardNumber: '4111111111111111', expiryDate: '12/30', cvc: '123' }
-        } as any)).rejects.toThrow('createPayment failed');
-    });
 
-    it('creates payment record successfully (happy)', async () => {
-        const created = { id: 2, order_id: 5, amount: 50, method: PaymentMethod.WALLET, status: 'pending' } as any;
-        supabase.__setResult({ data: created, error: null });
-
-        const res = await PaymentService.createPayment(5, 50, PaymentMethod.WALLET);
-        expect(res).toEqual(created);
-    });
-
-    it('handles error when creating payment record', async () => {
-        const error = { message: 'Error creating payment' };
-        supabase.__setResult({ data: null, error });
-        await expect(PaymentService.createPayment(6, 60, PaymentMethod.CREDIT_CARD)).rejects.toThrow(error.message);
+        await expect(PaymentService.createPaymentMethod({
+            user_id: 10,
+            type: PaymentType.CREDIT_CARD,
+            details: {}
+        } as any)).rejects.toThrow('Invalid payment details for selected payment type');
     });
 
     it('retrieves payment by id successfully (happy)', async () => {
-        const payment = { id: 10, order_id: 100, amount: 100, method: PaymentMethod.CREDIT_CARD, status: 'completed' } as any;
+        const payment = { id: 10, user_id: 100, type: PaymentType.CREDIT_CARD, is_default: true } as any;
         supabase.__setResult({ data: payment, error: null });
         const res = await PaymentService.getPaymentById(10);
         expect(res).toEqual(payment);
@@ -86,65 +66,26 @@ describe('Payment Service Unit Tests', () => {
         await expect(PaymentService.getPaymentById(999)).rejects.toThrow('Payment not found');
     });
 
-    it('handles error when updating payment status', async () => {
-        const error = { message: 'Error updating payment status' };
-        supabase.__setResult({ data: null, error });
-        await expect(PaymentService.updatePaymentStatus(1, 'failed')).rejects.toThrow(error.message);
-    });
-
-    it('refunds a completed payment successfully (happy)', async () => {
-        const existing = { id: 3, amount: 20, method: PaymentMethod.CREDIT_CARD, status: 'completed' } as any;
-        const refundResp = { success: true, status: 'refunded', transaction_id: 'r1', message: 'refunded' };
-        jest.spyOn(PaymentService, 'getPaymentById').mockResolvedValue(existing as any);
-        jest.spyOn(PaymentStrategyFactory, 'createStrategy').mockReturnValue({ refundPayment: jest.fn().mockResolvedValue(refundResp) } as any);
-        jest.spyOn(PaymentService, 'updatePaymentStatus').mockResolvedValue({ ...existing, status: 'refunded' } as any);
-
-        const result = await PaymentService.refundPayment(3);
-        expect(result.response.success).toBe(true);
-        expect(result.payment.status).toBe('refunded');
-    });
-
-    it('fails when strategy errors during processing (sad)', async () => {
-        jest.spyOn(PaymentStrategyFactory, 'createStrategy').mockReturnValue({
-            validatePaymentDetails: jest.fn().mockResolvedValue(true),
-            processPayment: jest.fn().mockRejectedValue(new Error('strategy fail'))
-        } as any);
-        jest.spyOn(PaymentService, 'createPayment').mockResolvedValue({ id: 4, amount: 10, method: PaymentMethod.CREDIT_CARD, status: 'pending' } as any);
-
-        await expect(PaymentService.processPayment({
-            order_id: 1,
-            amount: 10,
-            method: PaymentMethod.CREDIT_CARD,
-            metadata: { cardNumber: '4111111111111111', expiryDate: '12/30', cvc: '123' }
-        } as any)).rejects.toThrow('strategy fail');
-    });
-
-    it('rejects refund for non-completed payment (sad)', async () => {
-        jest.spyOn(PaymentService, 'getPaymentById').mockResolvedValue({ id: 5, amount: 10, method: PaymentMethod.CREDIT_CARD, status: 'pending' } as any);
-        await expect(PaymentService.refundPayment(5)).rejects.toThrow('Only completed payments can be refunded');
-    });
-
-    it('fails processPayment when strategy detail validation fails', async () => {
-        jest.spyOn(PaymentStrategyFactory, 'createStrategy').mockReturnValue({
-            validatePaymentDetails: jest.fn().mockResolvedValue(false),
-            processPayment: jest.fn()
-        } as any);
-
-        await expect(PaymentService.processPayment({
-            order_id: 1,
-            amount: 100,
-            method: PaymentMethod.CREDIT_CARD,
-            metadata: {}
-        } as any)).rejects.toThrow('Invalid payment details for selected payment method');
-    });
-
-    it('fails refund when strategy returns an unsupported status', async () => {
-        const existing = { id: 9, amount: 15, method: PaymentMethod.CREDIT_CARD, status: 'completed' } as any;
+    it('updates payment method details successfully (happy)', async () => {
+        const existing = { id: 3, user_id: 7, type: PaymentType.PAYPAL, is_default: false, details: { email: 'old@x.com' } } as any;
+        const updated = { ...existing, details: { email: 'new@x.com' } } as any;
         jest.spyOn(PaymentService, 'getPaymentById').mockResolvedValue(existing);
         jest.spyOn(PaymentStrategyFactory, 'createStrategy').mockReturnValue({
-            refundPayment: jest.fn().mockResolvedValue({ success: true, status: 'processing', message: 'in progress' })
+            validateDetails: jest.fn().mockResolvedValue(true),
+            normalizeDetails: jest.fn().mockReturnValue({ email: 'new@x.com' })
         } as any);
+        supabase.__setResult({ data: updated, error: null });
 
-        await expect(PaymentService.refundPayment(9)).rejects.toThrow('Unsupported payment status from strategy: processing');
+        const res = await PaymentService.updatePaymentMethod(3, { details: { email: 'new@x.com' } });
+        expect(res).toEqual(updated);
+    });
+
+    it('rejects update when no fields provided', async () => {
+        await expect(PaymentService.updatePaymentMethod(1, {})).rejects.toThrow('No updates provided');
+    });
+
+    it('deletes payment method successfully (happy)', async () => {
+        supabase.__setResult({ data: null, error: null });
+        await expect(PaymentService.deletePaymentMethod(5)).resolves.toBeUndefined();
     });
 });
