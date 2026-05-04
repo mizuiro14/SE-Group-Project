@@ -22,11 +22,15 @@ const allowedOrigins = [
   process.env.FRONTEND_URL // We will set this in Render later!
 ];
 
-// Replace your current app.use(cors({...})) with this:
+app.set("trust proxy", 1);
+
+app.use(express.json());
+app.use(cookieParser());
+
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    process.env.FRONTEND_URL || 'https://i-am-barley.vercel.app' // Fallback just in case!
+    process.env.FRONTEND_URL || 'https://i-am-barley.vercel.app'
   ],
   credentials: true
 }));
