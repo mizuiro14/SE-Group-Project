@@ -35,6 +35,8 @@ export default function StockPage() {
   const [addStockAmount, setAddStockAmount] = useState<number>(10);
   const [isAddingStock, setIsAddingStock] = useState(false);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
   // Fetch products continuously or on mount
   useEffect(() => {
     const fetchStock = async () => {
@@ -44,7 +46,7 @@ export default function StockPage() {
       try {
         setLoading(true);
         // 2. Fetch using the specific seller's ID
-        const response = await fetch(`http://localhost:5000/api/products?seller_id=${user.id}`); 
+        const response = await fetch(`${API_URL}/api/products?seller_id=${user.id}`); 
         if (!response.ok) throw new Error("Failed to fetch");
         
         const data = await response.json();
@@ -123,7 +125,7 @@ export default function StockPage() {
     try {
       const newQuantity = Number(productToReorder.quantity) + Number(reorderAmount);
 
-      const response = await fetch(`http://localhost:5000/api/products/${productToReorder.id}/quantity`, {
+      const response = await fetch(`${API_URL}/api/products/${productToReorder.id}/quantity`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: newQuantity })
@@ -171,7 +173,7 @@ export default function StockPage() {
     try {
       const newQuantity = Number(targetProduct.quantity) + Number(addStockAmount);
 
-      const response = await fetch(`http://localhost:5000/api/products/${targetProduct.id}/quantity`, {
+      const response = await fetch(`${API_URL}/api/products/${targetProduct.id}/quantity`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: newQuantity })

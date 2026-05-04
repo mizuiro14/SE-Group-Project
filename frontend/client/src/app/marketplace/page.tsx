@@ -113,12 +113,15 @@ export default function MarketplacePage() {
   const [productToBuy, setProductToBuy] = useState<Product | null>(null);
   const [purchaseQuantity, setPurchaseQuantity] = useState<number>(1);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isCartLoaded, setIsCartLoaded] = useState(false);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
   // Fetch Global Products on Mount
   useEffect(() => {
     const fetchGlobalProducts = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/products'); 
+        const response = await fetch(`${API_URL}/api/products`);
         const dbProducts = await response.json();
         
         const mappedProducts: Product[] = dbProducts.map((p: any) => {
@@ -149,6 +152,26 @@ export default function MarketplacePage() {
     fetchGlobalProducts();
   }, []);
 
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('user_cart');
+    if (savedCart) {
+      try {
+        setCart(JSON.parse(savedCart));
+      } catch (e) {
+        console.error("Failed to parse cart");
+      }
+    }
+    setIsCartLoaded(true);
+  }, []);
+
+  // Save to localStorage every time the cart updates
+  useEffect(() => {
+    if (isCartLoaded) {
+      localStorage.setItem('user_cart', JSON.stringify(cart));
+    }
+  }, [cart, isCartLoaded]);
+
   // Close custom drop downs when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -168,10 +191,10 @@ export default function MarketplacePage() {
     );
   };
 
-const showToast = (text: string, type: 'success' | 'error' = 'success') => {
-  setToastMessage({ text, type });
-  setTimeout(() => setToastMessage(null), 3000);
-};
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Add Item Logic
   const handleAddNewItem = async (e: React.FormEvent) => {
@@ -190,7 +213,7 @@ const showToast = (text: string, type: 'success' | 'error' = 'success') => {
         'Gummy': 5
       };
       const categoryId = categoryMap[newItemForm.category] || null;
-      const response = await fetch('http://localhost:5000/api/products', {
+      const response = await fetch(`${API_URL}/api/products`, {
         method: 'POST',
         headers: {
            'Content-Type': 'application/json'
@@ -251,85 +274,104 @@ const showToast = (text: string, type: 'success' | 'error' = 'success') => {
   // Process the Purchase and Decrement Stock
   // Add item to cart
   const handleAddToCart = () => {
-  if (!productToBuy) return;
-  if (purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock) {
-      showToast("Please enter a valid quantity.", "error"); // Replced alert!
-      return;
-  }
-
-  setCart(prevCart => {
-    const existingItemIndex = prevCart.findIndex(item => item.product.id === productToBuy.id);
-    if (existingItemIndex >= 0) {
-      const updatedCart = [...prevCart];
-      updatedCart[existingItemIndex] = {
-        ...updatedCart[existingItemIndex],
-        quantity: updatedCart[existingItemIndex].quantity + purchaseQuantity
-      };
-      return updatedCart;
+    if (!productToBuy) return;
+    if (purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock) {
+        showToast("Please enter a valid quantity.", "error"); // Replced alert!
+        return;
     }
-    return [...prevCart, { product: productToBuy, quantity: purchaseQuantity }];
-  });
 
-  showToast(`Added ${purchaseQuantity} of ${productToBuy.name} to your cart!`, "success"); // Replaced alert!
-  
-  setProductToBuy(null); 
-  setSelectedProduct(null);
-};
-
-const handleCheckoutCart = async () => {
-  if (cart.length === 0) return;
-  setIsCheckingOut(true);
-
-  try {
-    // 1. Format the data EXACTLY how the Express backend expects it
-    const orderPayload = {
-      // Send the email so the backend can look up the correct numeric ID
-      email: user?.email, 
-      items: cart.map(item => ({
-        product_id: Number(item.product.id), 
-        quantity: item.quantity,
-        unit_price: item.product.price
-      })),
-      status: 'pending' 
-    };
-
-    // 2. Create the Order (which also creates the Order Items natively)
-    const orderResponse = await fetch('http://localhost:5000/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderPayload)
+    setCart(prevCart => {
+      const existingItemIndex = prevCart.findIndex(item => item.product.id === productToBuy.id);
+      if (existingItemIndex >= 0) {
+        const updatedCart = [...prevCart];
+        updatedCart[existingItemIndex] = {
+          ...updatedCart[existingItemIndex],
+          quantity: updatedCart[existingItemIndex].quantity + purchaseQuantity
+        };
+        return updatedCart;
+      }
+      return [...prevCart, { product: productToBuy, quantity: purchaseQuantity }];
     });
-    
-    if (!orderResponse.ok) {
-       // Catch the real error message from the backend so we can see it
-       const errData = await orderResponse.json().catch(() => ({}));
-       throw new Error(errData.error || "Failed to create order");
-    }
-    
-    // We don't need the manual order_items API loop anymore! 
-    
-    // 3. Deduct stock from the products table (this is all we have left to do)
-    for (const item of cart) {
-      const remainingStock = item.product.rawStock - item.quantity;
-      await fetch(`http://localhost:5000/api/products/${item.product.id}/quantity`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: remainingStock })
-      });
-    }
 
-    showToast("Checkout successful!", "success"); 
-    setCart([]); 
-    setIsCartModalOpen(false);
+    showToast(`Added ${purchaseQuantity} of ${productToBuy.name} to your cart!`, "success"); // Replaced alert!
     
-  } catch (err: any) {
-    console.error(err);
-    // This will now show the actual text coming from the Express backend
-    showToast(err.message || 'An error occurred during checkout.', "error");
-  } finally {
-    setIsCheckingOut(false);
-  }
-};
+    setProductToBuy(null); 
+    setSelectedProduct(null);
+  };
+
+  const handleCheckoutCart = async () => {
+    if (cart.length === 0) return;
+    setIsCheckingOut(true);
+
+    try {
+      // 1. Format the data EXACTLY how the Express backend expects it
+      const orderPayload = {
+        // Send the email so the backend can look up the correct numeric ID
+        email: user?.email, 
+        items: cart.map(item => ({
+          product_id: Number(item.product.id), 
+          quantity: item.quantity,
+          unit_price: item.product.price
+        })),
+        status: 'pending' 
+      };
+
+      // 2. Create the Order (which also creates the Order Items natively)
+      const orderResponse = await fetch(`${API_URL}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload)
+      });
+      
+      if (!orderResponse.ok) {
+         // Catch the real error message from the backend so we can see it
+         const errData = await orderResponse.json().catch(() => ({}));
+         throw new Error(errData.error || "Failed to create order");
+      }
+      
+      // 3. Deduct stock from the products table (this is all we have left to do)
+      for (const item of cart) {
+        const remainingStock = item.product.rawStock - item.quantity;
+        await fetch(`${API_URL}/api/products/${item.product.id}/quantity`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: remainingStock })
+        });
+      }
+
+      // 4. Update local React state so the numbers change instantly on screen!
+      setProducts(currentProducts => 
+        currentProducts.map(p => {
+          const purchasedItem = cart.find(cartItem => cartItem.product.id === p.id);
+          if (purchasedItem) {
+            const newStock = p.rawStock - purchasedItem.quantity;
+            let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'Out of Stock';
+            if (newStock > 30) computedStatus = 'In Stock';
+            else if (newStock > 0) computedStatus = 'Low Stock';
+            
+            return {
+              ...p,
+              rawStock: newStock,
+              stockText: `${newStock} ${computedStatus === 'Low Stock' ? 'Low Stock' : 'in stock'}`,
+              status: computedStatus
+            };
+          }
+          return p; // leave untouched products alone
+        })
+      );
+
+      showToast("Checkout successful!", "success"); 
+      setCart([]); 
+      setIsCartModalOpen(false);
+      
+    } catch (err: any) {
+      console.error(err);
+      // This will now show the actual text coming from the Express backend
+      showToast(err.message || 'An error occurred during checkout.', "error");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
 
   // Apply the decorator pattern filtering using our state variables
   const filteredProducts = useMemo(() => {
@@ -352,15 +394,15 @@ const handleCheckoutCart = async () => {
   }, [products]);
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
-  payments.find(p => p.isDefault)?.id || (payments.length > 0 ? payments[0].id : '')
-);
+    payments.find(p => p.isDefault)?.id || (payments.length > 0 ? payments[0].id : '')
+  );
 
-// Add an effect to keep the default synced in case the context list changes
-useEffect(() => {
-  if (payments.length > 0 && !payments.find(p => p.id === selectedPaymentId)) {
-     setSelectedPaymentId(payments.find(p => p.isDefault)?.id || payments[0].id);
-  }
-}, [payments, selectedPaymentId]);
+  // Add an effect to keep the default synced in case the context list changes
+  useEffect(() => {
+    if (payments.length > 0 && !payments.find(p => p.id === selectedPaymentId)) {
+       setSelectedPaymentId(payments.find(p => p.isDefault)?.id || payments[0].id);
+    }
+  }, [payments, selectedPaymentId]);
 
   return (
     <div className={`flex h-screen ${theme.background} ${theme.textPrimary} font-sans transition-colors duration-300`}>

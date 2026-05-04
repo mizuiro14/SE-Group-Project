@@ -5,7 +5,11 @@ import {
     getPaymentsByOrderId,
     getAllPayments,
     refundPayment,
-    getPaymentStatistics
+    getPaymentStatistics,
+    createPaymentMethod,
+    getUserPaymentMethods,
+    updatePaymentMethod,
+    deletePaymentMethod
 } from '../controllers/paymentController';
 
 const paymentRouter: Router = express.Router();
@@ -32,6 +36,26 @@ paymentRouter.get('/order/:orderId', getPaymentsByOrderId);
  * Query: ?startDate=2024-01-01&endDate=2024-12-31
  */
 paymentRouter.get('/statistics', getPaymentStatistics);
+
+// ==========================================
+// EXACT MATCH ROUTES (MUST GO BEFORE /:id)
+// ==========================================
+
+// Save a new method
+paymentRouter.post('/methods', createPaymentMethod);
+
+// Get all saved methods for a user
+paymentRouter.get('/methods/:userId', getUserPaymentMethods);
+
+// Update a saved method
+paymentRouter.put('/methods/:id', updatePaymentMethod);
+
+// Delete a saved method
+paymentRouter.delete('/methods/:id', deletePaymentMethod);
+
+// ==========================================
+// DYNAMIC / PARAMETER ROUTES (MUST GO LAST)
+// ==========================================
 
 /**
  * POST /payments/:id/refund - Refund a payment

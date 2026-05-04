@@ -206,10 +206,12 @@ export default function ProfilePage() {
 
   const router = useRouter();
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/auth/me", {
+        const res = await fetch(`${API_URL}/api/auth/me`, {
           method: "GET",
           credentials: "include",
         });
@@ -243,7 +245,7 @@ export default function ProfilePage() {
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch("http://localhost:5000/api/users/update", {
+      const res = await fetch(`${API_URL}/api/users/update`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -299,16 +301,31 @@ export default function ProfilePage() {
     })));
   };
 
-  const handleDeletePayment = (id: string) => {
-    setPayments(prev => prev.filter(p => p.id !== id));
-  };
+  const handleDeletePayment = async (id: string) => {
+  try {
+    // Call the partner's DELETE route
+    const res = await fetch(`${API_URL}/api/payments/methods/${id}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
-    const handleEditPayment = (method: PaymentMethodData) => {
+    if (res.ok) {
+      // Remove from local React state visually
+      setPayments(prev => prev.filter(p => p.id !== id));
+    } else {
+      alert("Failed to delete payment method.");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};;
+
+  const handleEditPayment = (method: PaymentMethodData) => {
     // Create a shallow copy so we don't mutate the saved state directly while typing
     setEditingPayment({ ...method }); 
   };
 
-  const handeAddNew = (type: PaymentType) => {
+  const handleAddNew = (type: PaymentType) => {
     setShowAddMenu(false);
     // Scaffold a new method, but DON'T add it to the payments array yet
     const newId = Date.now().toString();
@@ -324,23 +341,56 @@ export default function ProfilePage() {
     setEditingPayment(newMethod);
   };
 
-  const handleSavePayment = () => {
-    if (!editingPayment) return;
-    
-    setPayments(prev => {
-      // Check if this payment already exists
-      const exists = prev.find(p => p.id === editingPayment.id);
-      if (exists) {
-        // Update existing
-        return prev.map(p => p.id === editingPayment.id ? editingPayment : p);
-      } else {
-        // Add new
-        return [...prev, editingPayment];
+  const handleSavePayment = async () => {
+  if (!editingPayment) return;
+
+  const isNew = !payments.some(p => p.id === editingPayment.id);
+  
+  try {
+    if (isNew) {
+      // 1. POST route for creating
+      const res = await fetch(`${API_URL}/api/payments/methods`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          user_id: user.id, // Your partner's schema requires this
+          type: editingPayment.type,
+          is_default: payments.length === 0 ? true : editingPayment.isDefault,
+          details: editingPayment.details
+        })
+      });
+
+      if (res.ok) {
+        const savedMethod = await res.json();
+        // Add the newly created DB entity to UI (it will have the real DB ID)
+        setPayments(prev => [...prev, savedMethod.method || savedMethod]);
       }
-    });
+    } else {
+      // 2. PUT route for updating
+      const res = await fetch(`${API_URL}/api/payments/methods/${editingPayment.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          type: editingPayment.type,
+          is_default: editingPayment.isDefault,
+          details: editingPayment.details
+        })
+      });
+
+      if (res.ok) {
+        const updatedMethod = await res.json();
+        setPayments(prev => prev.map(p => p.id === editingPayment.id ? (updatedMethod.method || updatedMethod) : p));
+      }
+    }
     
     setEditingPayment(null); // Close the modal
-  };
+  } catch (err) {
+    console.error("Error saving to database", err);
+    alert("Error communicating with server.");
+  }
+};
 
 
   return (
@@ -629,7 +679,7 @@ export default function ProfilePage() {
                           {Object.keys(paymentStrategies).map((type) => (
                             <button
                               key={type}
-                              onClick={() => handeAddNew(type as PaymentType)}
+                              onClick={() => handleAddNew(type as PaymentType)}
                               className={`w-full text-left px-4 py-3 text-sm font-medium ${theme.textPrimary} hover:${theme.surfaceHover} transition-colors capitalize`}
                             >
                               Add {type.replace('_', ' ')}
