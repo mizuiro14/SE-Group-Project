@@ -324,6 +324,7 @@ export default function ProfilePage() {
     }
   } catch (err) {
     console.error(err);
+    showToast("Error communicating with server.", "error");
   }
 };;
 
@@ -395,7 +396,7 @@ export default function ProfilePage() {
     setEditingPayment(null); // Close the modal
   } catch (err) {
     console.error("Error saving to database", err);
-    alert("Error communicating with server.");
+    showToast("Error communicating with server.", "error");
   }
 };
 
