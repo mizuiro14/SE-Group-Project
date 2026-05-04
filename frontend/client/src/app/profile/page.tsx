@@ -183,6 +183,13 @@ const mockPaymentMethods: PaymentMethodData[] = [
   { id: '3', type: 'paypal', isDefault: false, details: { email: 'user@example.com' } },
 ];
 
+  const [toastMessage, setToastMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('Personal Info');
@@ -258,7 +265,7 @@ export default function ProfilePage() {
       });
 
       if (res.ok) {
-        alert("Profile successfully updated!");
+        showToast("Profile successfully updated!", "success");
         setUser((prev: any) => ({
           ...prev,
           email: editEmail,
@@ -271,10 +278,10 @@ export default function ProfilePage() {
           }
         }));
       } else {
-         alert("Could not update profile. Please verify your backend route is set up.");
+         showToast("Could not update profile. Please verify your backend route is set up.", "error");
       }
     } catch (err) {
-      alert("A network error occurred. Is your server running?");
+      showToast("A network error occurred. Is your server running?", "error");
     } finally {
       setIsSaving(false);
     }
@@ -313,7 +320,7 @@ export default function ProfilePage() {
       // Remove from local React state visually
       setPayments(prev => prev.filter(p => p.id !== id));
     } else {
-      alert("Failed to delete payment method.");
+      showToast("Failed to delete payment method.", "error");
     }
   } catch (err) {
     console.error(err);
