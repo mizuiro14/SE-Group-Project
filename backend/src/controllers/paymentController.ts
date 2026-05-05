@@ -292,8 +292,9 @@ export const createPaymentMethod = async (req: Request, res: Response): Promise<
         if (error) throw new Error(error.message);
 
         res.status(201).json({ success: true, method: data });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error creating payment method' });
+    } catch (error: any) {
+        console.error("Payment Method Error:", error);
+        res.status(500).json({ success: false, message: 'Error creating payment method', error: error.message });
     }
 };
 
@@ -322,8 +323,9 @@ export const updatePaymentMethod = async (req: Request, res: Response): Promise<
         if (error) throw new Error(error.message);
 
         res.status(200).json({ success: true, method: data });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error updating payment method' });
+    } catch (error: any) {
+        console.error("Payment Method Error:", error);
+        res.status(500).json({ success: false, message: 'Error updating payment method', error: error.message });
     }
 };
 
@@ -340,7 +342,8 @@ export const deletePaymentMethod = async (req: Request, res: Response): Promise<
         if (error) throw new Error(error.message);
 
         res.status(200).json({ success: true, message: 'Deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error deleting payment method' });
+    } catch (error: any) {
+        console.error("Payment Method Error:", error);
+        res.status(500).json({ success: false, message: 'Error deleting payment method', error: error.message });
     }
 };
