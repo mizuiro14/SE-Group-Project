@@ -97,13 +97,6 @@ export default function StockPage() {
       return products.filter(item => item.quantity === 0);
   }, [products]);
 
-  const [toastMessage, setToastMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
-
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
-    setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
   // ===============================
   // FILTER FOR GLOBAL ADD STOCK
   // ===============================
@@ -123,7 +116,7 @@ export default function StockPage() {
     if (!productToReorder || reorderAmount <= 0) return;
 
     if (!productToReorder.id || productToReorder.id === "undefined" || isNaN(Number(productToReorder.id))) {
-       showToast("Cannot update this item: Invalid Product ID. Try refreshing the page to load official database products.", "error");
+       alert("Cannot update this item: Invalid Product ID. Try refreshing the page to load official database products.");
        setProductToReorder(null);
        return;
     }
@@ -158,7 +151,7 @@ export default function StockPage() {
       setReorderAmount(10);
     } catch (error: any) {
       console.error("Restock error:", error);
-      showToast(`Backend rejected: ${error.message}`, "error");
+      alert(`Backend rejected: ${error.message}`);
     } finally {
       setIsReordering(false);
     }
@@ -172,7 +165,7 @@ export default function StockPage() {
     if (!targetProduct) return;
 
     if (!targetProduct.id || targetProduct.id === "undefined" || isNaN(Number(targetProduct.id))) {
-       showToast("Invalid Product ID.", "error");
+       alert("Invalid Product ID.");
        return;
     }
 
@@ -208,7 +201,7 @@ export default function StockPage() {
       setAddStockAmount(10);
     } catch (error: any) {
       console.error("Add stock error:", error);
-      showToast(`Backend rejected: ${error.message}`, "error");
+      alert(`Backend rejected: ${error.message}`);
     } finally {
       setIsAddingStock(false);
     }
@@ -602,13 +595,6 @@ export default function StockPage() {
           </div>
 
         </div>
-          {toastMessage && (
-          <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 animate-in fade-in slide-in-from-bottom-5 font-bold ${
-            toastMessage.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-          }`}>
-            {toastMessage.text}
-          </div>
-        )}
       </main>
     </div>
   );
