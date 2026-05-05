@@ -113,8 +113,8 @@ describe('Order Service Unit Tests', () => {
         const chain = (supabase.from as jest.Mock).mock.results[0].value;
         expect(chain.insert).toHaveBeenCalledWith([{ user_id: 44, status: 'pending', total: 35 }]);
         expect(chain.insert).toHaveBeenCalledWith([
-            { order_id: 100, product_id: 1, quantity: 2, unit_price: 10, total_price: 20 },
-            { order_id: 100, product_id: 2, quantity: 3, unit_price: 5, total_price: 15 },
+            { order_id: 100, product_id: 1, quantity: 2, price: 10 },
+            { order_id: 100, product_id: 2, quantity: 3, price: 5 },
         ]);
     });
 

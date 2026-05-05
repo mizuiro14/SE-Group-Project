@@ -277,7 +277,7 @@ export const getUserPaymentMethods = async (req: Request, res: Response): Promis
         // FIX: explicitly cast userId to string for TypeScript
         const integerUserId = await getIntegerUserIdFromAuthUuid(userId as string);
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('payments') // Matches your database table name
             .select('*')
             .eq('user_id', integerUserId);
@@ -298,13 +298,13 @@ export const createPaymentMethod = async (req: Request, res: Response): Promise<
         const integerUserId = await getIntegerUserIdFromAuthUuid(user_id as string);
 
         if (is_default) {
-            await supabase
+            await supabaseAdmin
                 .from('payments')
                 .update({ is_default: false })
                 .eq('user_id', integerUserId);
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('payments')
             .insert([{ user_id: integerUserId, type, is_default, details }])
             .select()
@@ -328,13 +328,13 @@ export const updatePaymentMethod = async (req: Request, res: Response): Promise<
             // FIX: explicitly cast user_id to string for TypeScript
             const integerUserId = await getIntegerUserIdFromAuthUuid(user_id as string);
 
-            await supabase
+            await supabaseAdmin
                 .from('payments')
                 .update({ is_default: false })
                 .eq('user_id', integerUserId);
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('payments')
             .update({ type, is_default, details })
             .eq('id', id)
@@ -354,7 +354,7 @@ export const deletePaymentMethod = async (req: Request, res: Response): Promise<
     try {
         const { id } = req.params;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('payments')
             .delete()
             // optionally you can cast id here too just to be safe

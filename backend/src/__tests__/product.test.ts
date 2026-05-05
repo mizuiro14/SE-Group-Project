@@ -2,28 +2,41 @@ import productService, { getAllProducts, getProductById, createProduct, updatePr
 
 jest.mock('../SupabaseClient', () => {
     let result: any = { data: null, error: null };
-    const chain: any = {
-        select: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockReturnThis(),
-        update: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        single: jest.fn(async () => result),
-        order: jest.fn(async () => result),
-        gt: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        or: jest.fn().mockReturnThis(),
-        range: jest.fn().mockReturnThis(),
-        ilike: jest.fn().mockReturnThis(),
-        gte: jest.fn().mockReturnThis(),
-        lte: jest.fn().mockReturnThis(),
+    let adminResult: any = { data: [], error: null };
+
+    const makeChain = (getResult: () => any) => {
+        const chain: any = {
+            select: jest.fn().mockReturnThis(),
+            insert: jest.fn().mockReturnThis(),
+            update: jest.fn().mockReturnThis(),
+            delete: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn(async () => getResult()),
+            order: jest.fn(async () => getResult()),
+            in: jest.fn().mockReturnThis(),
+            gt: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockReturnThis(),
+            or: jest.fn().mockReturnThis(),
+            range: jest.fn().mockReturnThis(),
+            ilike: jest.fn().mockReturnThis(),
+            gte: jest.fn().mockReturnThis(),
+            lte: jest.fn().mockReturnThis(),
+        };
+        chain.then = (onFulfilled: any) => Promise.resolve(onFulfilled(getResult()));
+        return chain;
     };
-    chain.then = (onFulfilled: any) => Promise.resolve(onFulfilled(result));
+
+    const supabaseChain = makeChain(() => result);
+    const supabaseAdminChain = makeChain(() => adminResult);
 
     return {
         supabase: {
-            from: jest.fn(() => chain),
+            from: jest.fn(() => supabaseChain),
             __setResult: (r: any) => { result = r; }
+        },
+        supabaseAdmin: {
+            from: jest.fn(() => supabaseAdminChain),
+            __setResult: (r: any) => { adminResult = r; }
         }
     };
 });
@@ -47,7 +60,7 @@ describe('Product Service Unit Tests', () => {
         supabase.__setResult({ data: product, error: null });
 
         const res = await getProductById(2);
-        expect(res).toEqual(product);
+        expect(res).toEqual({ ...product, image_url: null });
     });
 
     it('gets all products with filters (happy)', async () => {
