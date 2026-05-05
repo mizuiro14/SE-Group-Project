@@ -26,9 +26,7 @@ type Order = {
   created_at: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL 
-  ? `${process.env.NEXT_PUBLIC_API_URL}/api` 
-  : 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const STATUS_LABELS: Record<ShippingStatus, string> = {
   pending: 'Queued',

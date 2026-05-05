@@ -22,19 +22,16 @@ const allowedOrigins = [
   process.env.FRONTEND_URL // We will set this in Render later!
 ];
 
-app.set("trust proxy", 1);
-
-app.use(express.json());
-app.use(cookieParser());
-
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    process.env.FRONTEND_URL || 'https://i-am-barley.vercel.app'
-  ],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
-
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
