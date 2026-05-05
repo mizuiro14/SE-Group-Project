@@ -105,6 +105,7 @@ export default function MarketplacePage() {
     description: '',
     imageFile: null
   });
+  const productImageInputRef = useRef<HTMLInputElement | null>(null);
 
   // --- PRODUCT DETAILS MODAL STATE ---
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -472,8 +473,8 @@ export default function MarketplacePage() {
                   onClick={handleAddToCart}
                   disabled={isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock}
                   className={`px-6 py-2.5 rounded-lg font-bold text-sm text-white flex items-center gap-2 transition-all ${isPurchasing || purchaseQuantity < 1 || purchaseQuantity > productToBuy.rawStock
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-700 hover:bg-green-800 shadow-md'
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-700 hover:bg-green-800 shadow-md'
                     }`}
                 >
                   {isPurchasing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -611,8 +612,8 @@ export default function MarketplacePage() {
                   <div>
                     <h4 className={`text-sm font-bold ${theme.textSecondary} mb-1`}>Status</h4>
                     <span className={`text-sm font-bold px-3 py-1 rounded-full inline-block ${selectedProduct.status === 'In Stock' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-[#E5F0E6] text-[#2C3E2D]') :
-                        selectedProduct.status === 'Low Stock' ? (isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700') :
-                          (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')
+                      selectedProduct.status === 'Low Stock' ? (isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700') :
+                        (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')
                       }`}>
                       {selectedProduct.stockText}
                     </span>
@@ -632,8 +633,8 @@ export default function MarketplacePage() {
                   onClick={() => handleOpenBuyModal(selectedProduct)} /* Trigger buy modal */
                   disabled={selectedProduct.status === 'Out of Stock'}
                   className={`w-full py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all ${selectedProduct.status === 'Out of Stock'
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
-                      : 'bg-green-700 text-white hover:bg-green-800 shadow-md hover:shadow-lg'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                    : 'bg-green-700 text-white hover:bg-green-800 shadow-md hover:shadow-lg'
                     }`}
                 >
                   <ShoppingCart className="w-5 h-5" />
@@ -677,11 +678,23 @@ export default function MarketplacePage() {
                 {/* Photo Upload (Optional) */}
                 <div className="flex flex-col gap-1.5">
                   <label className={`text-sm font-bold ${theme.textSecondary}`}>Product Image (Optional)</label>
-                  <div className={`border-2 border-dashed ${theme.border} rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:${theme.surfaceHover} hover:border-green-500 transition-colors group`}>
+                  <div
+                    className={`border-2 border-dashed ${theme.border} rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:${theme.surfaceHover} hover:border-green-500 transition-colors group`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => productImageInputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        productImageInputRef.current?.click();
+                      }
+                    }}
+                  >
                     <ImageIcon className={`w-8 h-8 ${theme.textSecondary} group-hover:text-green-500 mb-2 transition-colors`} />
                     <span className={`text-sm font-medium ${theme.textPrimary}`}>Click to upload image</span>
                     <span className={`text-xs ${theme.textSecondary} mt-1`}>JPG, PNG or WEBP (Max 5MB)</span>
                     <input
+                      ref={productImageInputRef}
                       type="file"
                       accept="image/*"
                       className="hidden"
@@ -837,8 +850,8 @@ export default function MarketplacePage() {
                 <button
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm border transition-colors ${selectedCategories.length > 0
-                      ? `bg-green-800/10 border-green-700 text-green-600`
-                      : `${theme.surface} ${theme.textPrimary} border-${theme.border} hover:${theme.surfaceHover}`
+                    ? `bg-green-800/10 border-green-700 text-green-600`
+                    : `${theme.surface} ${theme.textPrimary} border-${theme.border} hover:${theme.surfaceHover}`
                     }`}
                 >
                   <Filter className="w-4 h-4" />
@@ -943,8 +956,8 @@ export default function MarketplacePage() {
                       <td className={`py-4 font-bold ${theme.textPrimary}`}>${Number(product.price).toFixed(2)}</td>
                       <td className="py-4">
                         <span className={`text-xs font-bold px-3 py-1 rounded-full ${product.status === 'In Stock' ? (isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-[#E5F0E6] text-[#2C3E2D]') :
-                            product.status === 'Low Stock' ? (isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700') :
-                              (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')
+                          product.status === 'Low Stock' ? (isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700') :
+                            (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700')
                           }`}>
                           {product.status}
                         </span>
@@ -955,8 +968,8 @@ export default function MarketplacePage() {
                             onClick={() => handleOpenBuyModal(product)} /* Trigger detail from table */
                             disabled={product.status === "Out of Stock"}
                             className={`p-1.5 rounded-md transition-colors ${product.status === "Out of Stock"
-                                ? 'opacity-50 cursor-not-allowed'
-                                : 'hover:bg-green-600 hover:text-white'
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'hover:bg-green-600 hover:text-white'
                               }`}
                           >
                             <ShoppingCart className="w-4 h-4" />

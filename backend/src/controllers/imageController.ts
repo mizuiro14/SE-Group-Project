@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import imageService from '../services/imageService';
-import { searchUserByEmail } from '../services/userService';
+import { createUser, searchUserByEmail } from '../services/userService';
 
 const parseStringParam = (param: string | string[]): string => {
     return Array.isArray(param) ? param[0] : param;
@@ -27,12 +27,34 @@ const resolveUserId = async (value: string): Promise<number> => {
             throw new Error('Invalid id parameter');
         }
 
-        const user = await searchUserByEmail(value);
-        if (!user?.id) {
+        const normalizedEmail = value.trim().toLowerCase();
+        const user = await searchUserByEmail(normalizedEmail);
+        if (user?.id) {
+            return user.id;
+        }
+
+        const username = normalizedEmail.split('@')[0] || 'UnknownUser';
+        try {
+            const createdUsers = await createUser({
+                username,
+                user_email: normalizedEmail
+            });
+            const createdUser = createdUsers[0];
+            if (createdUser?.id) {
+                return createdUser.id;
+            }
+        } catch (err: any) {
+            if (!err?.message?.includes('users_user_email_key')) {
+                throw err;
+            }
+        }
+
+        const existingUser = await searchUserByEmail(normalizedEmail);
+        if (!existingUser?.id) {
             throw new Error('User not found');
         }
 
-        return user.id;
+        return existingUser.id;
     }
 };
 

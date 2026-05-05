@@ -275,8 +275,17 @@ export default function ProfilePage() {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Image upload failed');
+        const errText = await res.text().catch(() => '');
+        let errMessage = 'Image upload failed';
+        try {
+          const errData = errText ? JSON.parse(errText) : {};
+          errMessage = errData.error || errData.message || errMessage;
+        } catch {
+          if (errText) {
+            errMessage = errText;
+          }
+        }
+        throw new Error(`HTTP ${res.status} - ${errMessage}`);
       }
 
       const uploaded = await res.json();
@@ -584,8 +593,8 @@ export default function ProfilePage() {
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-6 py-2 rounded-full whitespace-nowrap tracking-wide transition-colors ${activeTab === tab
-                        ? 'bg-green-800 text-white shadow-sm'
-                        : `${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover}`
+                      ? 'bg-green-800 text-white shadow-sm'
+                      : `${theme.textSecondary} hover:${theme.textPrimary} hover:${theme.surfaceHover}`
                       }`}
                   >
                     {tab}
@@ -799,8 +808,8 @@ export default function ProfilePage() {
                       <button
                         onClick={toggleTheme}
                         className={`px-5 py-2 text-sm font-bold rounded-lg transition-colors shadow-sm ${isDarkMode
-                            ? 'bg-white text-gray-900 hover:bg-gray-200'
-                            : 'bg-gray-900 text-white hover:bg-gray-800'
+                          ? 'bg-white text-gray-900 hover:bg-gray-200'
+                          : 'bg-gray-900 text-white hover:bg-gray-800'
                           }`}
                       >
                         {isDarkMode ? 'Enable Light Mode' : 'Enable Dark Mode'}
