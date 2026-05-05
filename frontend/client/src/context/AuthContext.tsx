@@ -7,13 +7,14 @@ interface AuthContextType {
   user: any | null;
   loading: boolean;
   isSeller: boolean;
+  isBuyer: boolean;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>; // <-- Added refreshUser requirement
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode; }) {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -23,7 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch(`${API_URL}/api/auth/me`, {
         method: "GET",
-        credentials: "include", 
+        credentials: "include",
       });
 
       if (res.ok) {
@@ -54,16 +55,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("Logout error", err);
     } finally {
-      setUser(null); 
-      router.push('/login'); 
+      setUser(null);
+      router.push('/login');
     }
   };
 
   const isSeller = user?.user_metadata?.role === 'seller' || user?.role === 'seller';
+  const isBuyer = user?.user_metadata?.role === 'buyer' || user?.role === 'buyer';
 
   // Export refreshUser so the login page can call it
   return (
-    <AuthContext.Provider value={{ user, loading, isSeller, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, isSeller, isBuyer, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

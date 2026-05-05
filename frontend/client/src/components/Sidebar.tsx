@@ -9,7 +9,7 @@ import { useTheme } from '@/theme/ThemeContext'; // <-- Import the hook
 import { useAuth } from '@/context/AuthContext';
 
 export default function Sidebar() {
-  const { user, isSeller } = useAuth();
+  const { user, isSeller, isBuyer } = useAuth();
   const pathname = usePathname();
   const { theme } = useTheme(); // <-- Get the global theme
 
@@ -59,12 +59,14 @@ export default function Sidebar() {
                   </Link>
                 </li>
               )}
-              <li>
-                <Link href="/delivery" className={isActive('/delivery') ? activeClass : inactiveClass}>
-                  <Truck className={`w-5 h-5 ${isActive('/delivery') ? 'text-green-700' : theme.textSecondary}`} />
-                  Delivery Page
-                </Link>
-              </li>
+              {!isBuyer && (
+                <li>
+                  <Link href="/delivery" className={isActive('/delivery') ? activeClass : inactiveClass}>
+                    <Truck className={`w-5 h-5 ${isActive('/delivery') ? 'text-green-700' : theme.textSecondary}`} />
+                    Delivery Page
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
           <div>
