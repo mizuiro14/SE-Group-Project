@@ -83,6 +83,7 @@ export default function MarketplacePage() {
   // --- STATE ---
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string, type: 'success' | 'error'; } | null>(null);
@@ -105,6 +106,7 @@ export default function MarketplacePage() {
     description: '',
     imageFile: null
   });
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const productImageInputRef = useRef<HTMLInputElement | null>(null);
 
   // --- PRODUCT DETAILS MODAL STATE ---
@@ -117,6 +119,20 @@ export default function MarketplacePage() {
   const [isCartLoaded, setIsCartLoaded] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+  useEffect(() => {
+    if (!newItemForm.imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(newItemForm.imageFile);
+    setImagePreviewUrl(previewUrl);
+
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [newItemForm.imageFile]);
 
   // Fetch Global Products on Mount
   useEffect(() => {
@@ -283,6 +299,7 @@ export default function MarketplacePage() {
 
       // Cleanup and close
       setNewItemForm({ name: '', category: CATEGORIES[0], stock: '', price: '', description: '', imageFile: null });
+      setImagePreviewUrl(null);
       setIsModalOpen(false);
 
     } catch (err) {
@@ -401,14 +418,22 @@ export default function MarketplacePage() {
 
   // Apply the decorator pattern filtering using our state variables
   const filteredProducts = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const searchedProducts = normalizedQuery
+      ? products.filter(product =>
+        product.name.toLowerCase().includes(normalizedQuery) ||
+        product.category.toLowerCase().includes(normalizedQuery) ||
+        (product.description || '').toLowerCase().includes(normalizedQuery)
+      )
+      : products;
     let productFilter: ProductFilter = new BaseFilter();
 
     if (selectedCategories.length > 0) {
       productFilter = new CategoryFilter(productFilter, selectedCategories);
     }
 
-    return productFilter.filter(products);
-  }, [selectedCategories, products]);
+    return productFilter.filter(searchedProducts);
+  }, [selectedCategories, products, searchQuery]);
 
   // Recommended Products: Grab 4 random products that are strictly "In Stock"
   const recommendedProducts = useMemo(() => {
@@ -690,9 +715,15 @@ export default function MarketplacePage() {
                       }
                     }}
                   >
-                    <ImageIcon className={`w-8 h-8 ${theme.textSecondary} group-hover:text-green-500 mb-2 transition-colors`} />
-                    <span className={`text-sm font-medium ${theme.textPrimary}`}>Click to upload image</span>
-                    <span className={`text-xs ${theme.textSecondary} mt-1`}>JPG, PNG or WEBP (Max 5MB)</span>
+                    {imagePreviewUrl ? (
+                      <img src={imagePreviewUrl} alt="Selected product" className="w-full h-40 object-cover rounded-lg" />
+                    ) : (
+                      <>
+                        <ImageIcon className={`w-8 h-8 ${theme.textSecondary} group-hover:text-green-500 mb-2 transition-colors`} />
+                        <span className={`text-sm font-medium ${theme.textPrimary}`}>Click to upload image</span>
+                        <span className={`text-xs ${theme.textSecondary} mt-1`}>JPG, PNG or WEBP (Max 5MB)</span>
+                      </>
+                    )}
                     <input
                       ref={productImageInputRef}
                       type="file"
@@ -814,6 +845,7 @@ export default function MarketplacePage() {
         {/* TOP NAVBAR */}
         <DashboardHeader
           searchPlaceholder="Search marketplace products..."
+          onSearchChange={setSearchQuery}
           cartCount={cart.reduce((total, item) => total + item.quantity, 0)}
           onCartClick={() => setIsCartModalOpen(true)}
         />
@@ -891,6 +923,7 @@ export default function MarketplacePage() {
                     name={product.name}
                     price={product.price}
                     stockCount={product.rawStock}
+                    imageUrl={product.imageUrl}
                   // Since the current ProductCard might not have image props yet, 
                   // we'll pass standard props, but you can adjust your ProductCard later
                   />
@@ -927,7 +960,9 @@ export default function MarketplacePage() {
                 {filteredProducts.length === 0 ? (
                   <tr>
                     <td colSpan={7} className={`py-8 text-center ${theme.textSecondary}`}>
-                      No products match the selected filters.
+                      {searchQuery.trim().length > 0
+                        ? 'No products match your search or filters.'
+                        : 'No products match the selected filters.'}
                     </td>
                   </tr>
                 ) : (
