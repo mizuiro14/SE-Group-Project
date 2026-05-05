@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import imageService from '../services/imageService';
+import { searchUserByEmail } from '../services/userService';
 
 const parseStringParam = (param: string | string[]): string => {
     return Array.isArray(param) ? param[0] : param;
@@ -12,6 +13,27 @@ const parseId = (value: string): number => {
     }
 
     return parsed;
+};
+
+const isEmail = (value: string): boolean => {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+};
+
+const resolveUserId = async (value: string): Promise<number> => {
+    try {
+        return parseId(value);
+    } catch {
+        if (!isEmail(value)) {
+            throw new Error('Invalid id parameter');
+        }
+
+        const user = await searchUserByEmail(value);
+        if (!user?.id) {
+            throw new Error('User not found');
+        }
+
+        return user.id;
+    }
 };
 
 export const uploadProductImage = async (req: Request, res: Response): Promise<void> => {
@@ -41,12 +63,17 @@ export const uploadUserImage = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        const userId = parseId(parseStringParam(req.params.userId));
+        const userId = await resolveUserId(parseStringParam(req.params.userId));
         const image = await imageService.uploadImage(req.file, { userId });
         res.status(201).json(image);
     } catch (err: any) {
         if (err.message === 'Invalid id parameter') {
             res.status(400).json({ error: err.message });
+            return;
+        }
+
+        if (err.message === 'User not found') {
+            res.status(404).json({ error: err.message });
             return;
         }
 
@@ -71,12 +98,17 @@ export const getImagesByProduct = async (req: Request, res: Response): Promise<v
 
 export const getImagesByUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const userId = parseId(parseStringParam(req.params.userId));
+        const userId = await resolveUserId(parseStringParam(req.params.userId));
         const images = await imageService.getUserImages(userId);
         res.status(200).json(images);
     } catch (err: any) {
         if (err.message === 'Invalid id parameter') {
             res.status(400).json({ error: err.message });
+            return;
+        }
+
+        if (err.message === 'User not found') {
+            res.status(404).json({ error: err.message });
             return;
         }
 
