@@ -183,6 +183,13 @@ const mockPaymentMethods: PaymentMethodData[] = [
   { id: '3', type: 'paypal', isDefault: false, details: { email: 'user@example.com' } },
 ];
 
+  const [toastMessage, setToastMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('Personal Info');
@@ -315,7 +322,7 @@ export default function ProfilePage() {
       });
 
       if (res.ok) {
-        alert("Profile successfully updated!");
+        showToast("Profile successfully updated!", "success");
         setUser((prev: any) => ({
           ...prev,
           email: editEmail,
@@ -328,10 +335,10 @@ export default function ProfilePage() {
           }
         }));
       } else {
-        alert("Could not update profile. Please verify your backend route is set up.");
+         showToast("Could not update profile. Please verify your backend route is set up.", "error");
       }
     } catch (err) {
-      alert("A network error occurred. Is your server running?");
+      showToast("A network error occurred. Is your server running?", "error");
     } finally {
       setIsSaving(false);
     }
@@ -359,23 +366,24 @@ export default function ProfilePage() {
   };
 
   const handleDeletePayment = async (id: string) => {
-    try {
-      // Call the partner's DELETE route
-      const res = await fetch(`${API_URL}/api/payments/methods/${id}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
+  try {
+    // Call the partner's DELETE route
+    const res = await fetch(`${API_URL}/api/payments/methods/${id}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
-      if (res.ok) {
-        // Remove from local React state visually
-        setPayments(prev => prev.filter(p => p.id !== id));
-      } else {
-        alert("Failed to delete payment method.");
-      }
-    } catch (err) {
-      console.error(err);
+    if (res.ok) {
+      // Remove from local React state visually
+      setPayments(prev => prev.filter(p => p.id !== id));
+    } else {
+      showToast("Failed to delete payment method.", "error");
     }
-  };;
+  } catch (err) {
+    console.error(err);
+    showToast("Error communicating with server.", "error");
+  }
+};;
 
   const handleEditPayment = (method: PaymentMethodData) => {
     // Create a shallow copy so we don't mutate the saved state directly while typing
@@ -447,7 +455,13 @@ export default function ProfilePage() {
       console.error("Error saving to database", err);
       alert("Error communicating with server.");
     }
-  };
+    
+    setEditingPayment(null); // Close the modal
+  } catch (err) {
+    console.error("Error saving to database", err);
+    showToast("Error communicating with server.", "error");
+  }
+};
 
 
   return (

@@ -36,14 +36,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     try {
         const data = await authService.login(email, password);
         
-        // --- NEW COOKIE LOGIC ---
-        // Securely attach the token as an HTTP-only cookie
+        // --- THIS MUST BE res.cookie ---
         if (data.session) {
             res.cookie('access_token', data.session.access_token, {
-                httpOnly: true, // Prevents JavaScript/XSS attacks from reading the cookie
-                secure: process.env.NODE_ENV === 'production', // Uses HTTPS in production
-                sameSite: 'lax',
-                maxAge: 3600 * 1000 // Expires in 1 hour
+                httpOnly: true, 
+                secure: true,      // Required for Vercel/Render
+                sameSite: 'none',  // Required for Vercel/Render
+                maxAge: 3600 * 1000 
             });
         }
 
@@ -56,7 +55,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const logout = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    // Check for the token inside req.cookies instead of req.headers
     const token = req.cookies?.access_token;
 
     try {
@@ -64,12 +62,19 @@ export const logout = async (req: AuthenticatedRequest, res: Response): Promise<
             await authService.logout(token);
         }
         
-        // --- CLEAR COOKIE ---
-        // Telling the browser to delete the cookie so they stay logged out
-        res.clearCookie('access_token');
+        // --- LOGOUT MUST ALSO USE THE NEW SETTINGS TO CLEAR IT ---
+        res.clearCookie('access_token', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none'
+        });
         res.status(200).json({ message: 'Logged out successfully' });
     } catch (err: any) {
-        res.clearCookie('access_token'); // Ensure cookie is cleared even if Supabase throws an error
+        res.clearCookie('access_token', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none'
+        });
         res.status(500).json({ error: err.message });
     }
 };
