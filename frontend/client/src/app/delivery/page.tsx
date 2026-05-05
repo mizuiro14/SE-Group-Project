@@ -27,7 +27,11 @@ type Order = {
   created_at: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = (() => {
+  const rawBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const trimmed = rawBase.replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+})();
 
 const STATUS_LABELS: Record<ShippingStatus, string> = {
   pending: 'Queued',
