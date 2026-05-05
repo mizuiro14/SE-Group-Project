@@ -413,10 +413,10 @@ export default function ProfilePage() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            user_id: user.id, // Your partner's schema requires this
+            user_id: user.id, 
             type: editingPayment.type,
             is_default: payments.length === 0 ? true : editingPayment.isDefault,
-            details: editingPayment.details
+            details: editingPayment.details // Make sure this is a JS object, not a string
           })
         });
 
