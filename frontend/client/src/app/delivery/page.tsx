@@ -73,7 +73,7 @@ const getStatusBadgeClass = (status: ShippingStatus, isDarkMode: boolean): strin
 
 export default function DeliveryPage() {
   const { theme, isDarkMode } = useTheme();
-  const { user, isSeller } = useAuth();
+  const { user, isSeller, loading } = useAuth();
 
   const [shippings, setShippings] = useState<Shipping[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -138,9 +138,10 @@ export default function DeliveryPage() {
   };
 
   useEffect(() => {
+    if (loading) return;
     if (isSeller && !user?.id) return;
     void loadShippingsAndOrders(isSeller ? user?.id : undefined);
-  }, [isSeller, user?.id]);
+  }, [isSeller, user?.id, loading]);
 
   const filteredShippings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
