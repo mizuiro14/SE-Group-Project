@@ -27,7 +27,7 @@ const attachProductImages = async (products: Product[]): Promise<Product[]> => {
     }
 
     const productIds = products.map((product) => product.id);
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('images')
         .select('product_id, image_url, created_at')
         .in('product_id', productIds)
