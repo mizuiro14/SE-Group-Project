@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { usePayment } from '@/context/PaymentContext';
+import toast from 'react-hot-toast';
 
 // ============================================================================
 // --- STRATEGY PATTERN TYPES & INTERFACES (Payment Methods) ---
@@ -271,6 +272,7 @@ export default function ProfilePage() {
 
       const res = await fetch(`${API_URL}/api/images/users/${encodeURIComponent(user.email)}`, {
         method: 'POST',
+        credentials: 'include',
         body: formData
       });
 
@@ -292,7 +294,7 @@ export default function ProfilePage() {
       setUserImageUrl(uploaded.image_url || null);
     } catch (err) {
       console.error('Failed to upload user image', err);
-      alert('Image upload failed. Please try again.');
+      toast.error('Image upload failed. Please try again.');
     } finally {
       setIsUploadingImage(false);
       event.target.value = '';
@@ -315,7 +317,7 @@ export default function ProfilePage() {
       });
 
       if (res.ok) {
-        alert("Profile successfully updated!");
+        toast.success("Profile successfully updated!");
         setUser((prev: any) => ({
           ...prev,
           email: editEmail,
@@ -328,10 +330,10 @@ export default function ProfilePage() {
           }
         }));
       } else {
-        alert("Could not update profile. Please verify your backend route is set up.");
+        toast.error("Could not update profile. Please verify your backend route is set up.");
       }
     } catch (err) {
-      alert("A network error occurred. Is your server running?");
+      toast.error("A network error occurred. Is your server running?");
     } finally {
       setIsSaving(false);
     }
@@ -370,7 +372,7 @@ export default function ProfilePage() {
         // Remove from local React state visually
         setPayments(prev => prev.filter(p => p.id !== id));
       } else {
-        alert("Failed to delete payment method.");
+        toast.error("Failed to delete payment method.");
       }
     } catch (err) {
       console.error(err);
@@ -445,7 +447,7 @@ export default function ProfilePage() {
       setEditingPayment(null); // Close the modal
     } catch (err) {
       console.error("Error saving to database", err);
-      alert("Error communicating with server.");
+      toast.error("Error communicating with server.");
     }
   };
 
