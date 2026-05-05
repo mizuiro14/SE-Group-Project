@@ -14,38 +14,40 @@ export interface PaymentMethodData {
 interface PaymentContextType {
   payments: PaymentMethodData[];
   setPayments: React.Dispatch<React.SetStateAction<PaymentMethodData[]>>;
-  refreshPayments: () => Promise<void>; 
+  refreshPayments: () => Promise<void>;
 }
 
 const PaymentContext = createContext<PaymentContextType | undefined>(undefined);
 
-export const PaymentProvider = ({ children }: { children: ReactNode }) => {
+export const PaymentProvider = ({ children }: { children: ReactNode; }) => {
   const [payments, setPayments] = useState<PaymentMethodData[]>([]);
-  const { user } = useAuth(); 
+  const { user } = useAuth();
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+  const normalizePaymentMethod = (method: any): PaymentMethodData => ({
+    id: String(method.id),
+    type: method.type ?? method.method,
+    isDefault: Boolean(method.is_default ?? method.isDefault),
+    details: method.details ?? {},
+  });
+
   const fetchPayments = async () => {
     if (!user || !user.id) return;
-    
+
     try {
       const res = await fetch(`${API_URL}/api/payments/methods/${user.id}`, {
         credentials: "include"
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         const rawMethods = data.methods || data;
-        
+
         // Map database schema (is_default) to frontend type (isDefault)
-        const formattedMethods = rawMethods.map((m: any) => ({
-             id: String(m.id),
-             type: m.type,
-             isDefault: m.is_default || m.isDefault,
-             details: m.details,
-        }));
-        
-        setPayments(formattedMethods); 
+        const formattedMethods = rawMethods.map(normalizePaymentMethod);
+
+        setPayments(formattedMethods);
       }
     } catch (err) {
       console.error("Failed to load payment methods", err);

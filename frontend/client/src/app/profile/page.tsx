@@ -203,7 +203,7 @@ export default function ProfilePage() {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   // Payment Methods State
-  const { payments, setPayments } = usePayment();
+  const { payments, setPayments, refreshPayments } = usePayment();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentMethodData | null>(null);
 
@@ -413,7 +413,7 @@ export default function ProfilePage() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            user_id: user.id, 
+            user_id: user.id,
             type: editingPayment.type,
             is_default: payments.length === 0 ? true : editingPayment.isDefault,
             details: editingPayment.details // Make sure this is a JS object, not a string
@@ -421,9 +421,19 @@ export default function ProfilePage() {
         });
 
         if (res.ok) {
-          const savedMethod = await res.json();
-          // Add the newly created DB entity to UI (it will have the real DB ID)
-          setPayments(prev => [...prev, savedMethod.method || savedMethod]);
+          await refreshPayments();
+          toast.success('Payment method added.');
+        } else {
+          const errText = await res.text().catch(() => '');
+          let errMessage = 'Failed to add payment method.';
+          try {
+            const errData = errText ? JSON.parse(errText) : {};
+            errMessage = errData.message || errData.error || errMessage;
+          } catch {
+            if (errText) errMessage = errText;
+          }
+          toast.error(errMessage);
+          return;
         }
       } else {
         // 2. PUT route for updating
@@ -439,8 +449,19 @@ export default function ProfilePage() {
         });
 
         if (res.ok) {
-          const updatedMethod = await res.json();
-          setPayments(prev => prev.map(p => p.id === editingPayment.id ? (updatedMethod.method || updatedMethod) : p));
+          await refreshPayments();
+          toast.success('Payment method updated.');
+        } else {
+          const errText = await res.text().catch(() => '');
+          let errMessage = 'Failed to update payment method.';
+          try {
+            const errData = errText ? JSON.parse(errText) : {};
+            errMessage = errData.message || errData.error || errMessage;
+          } catch {
+            if (errText) errMessage = errText;
+          }
+          toast.error(errMessage);
+          return;
         }
       }
 

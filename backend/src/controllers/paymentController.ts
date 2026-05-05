@@ -38,19 +38,40 @@ const getIntegerUserIdFromAuthUuid = async (uuid: string): Promise<number> => {
     }
 
     const userEmail = authData.user.email;
+    if (!userEmail) {
+        throw new Error("User email missing in Supabase Auth");
+    }
 
     // 2. Look up the custom integer ID in your 'users' table
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await supabaseAdmin
         .from('users')
         .select('id')
         .eq('user_email', userEmail)
         .single();
 
-    if (userError || !userData) {
+    if (!userError && userData) {
+        return userData.id;
+    }
+
+    // 3. Self-heal: create user if missing in public.users
+    const username =
+        authData.user.user_metadata?.username ||
+        authData.user.user_metadata?.full_name ||
+        userEmail.split('@')[0] ||
+        'UnknownUser';
+    const role = authData.user.user_metadata?.role || 'buyer';
+
+    const { data: createdUser, error: createError } = await supabaseAdmin
+        .from('users')
+        .insert({ user_email: userEmail, username, role })
+        .select('id')
+        .single();
+
+    if (createError || !createdUser) {
         throw new Error("User not found in custom Postgres users table");
     }
 
-    return userData.id; // Returns the valid int8!
+    return createdUser.id;
 };
 
 export const createPayment = async (req: Request, res: Response): Promise<void> => {
@@ -251,11 +272,11 @@ export const getPaymentStatistics = async (req: Request, res: Response): Promise
 // ===============================================
 export const getUserPaymentMethods = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId } = req.params; 
-        
+        const { userId } = req.params;
+
         // FIX: explicitly cast userId to string for TypeScript
         const integerUserId = await getIntegerUserIdFromAuthUuid(userId as string);
-        
+
         const { data, error } = await supabase
             .from('payments') // Matches your database table name
             .select('*')
@@ -271,16 +292,16 @@ export const getUserPaymentMethods = async (req: Request, res: Response): Promis
 
 export const createPaymentMethod = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { user_id, type, is_default, details } = req.body; 
-        
+        const { user_id, type, is_default, details } = req.body;
+
         // FIX: explicitly cast user_id to string for TypeScript
         const integerUserId = await getIntegerUserIdFromAuthUuid(user_id as string);
 
         if (is_default) {
-           await supabase
-               .from('payments')
-               .update({ is_default: false })
-               .eq('user_id', integerUserId);
+            await supabase
+                .from('payments')
+                .update({ is_default: false })
+                .eq('user_id', integerUserId);
         }
 
         const { data, error } = await supabase
@@ -301,16 +322,16 @@ export const createPaymentMethod = async (req: Request, res: Response): Promise<
 export const updatePaymentMethod = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const { type, is_default, details, user_id } = req.body; 
+        const { type, is_default, details, user_id } = req.body;
 
         if (is_default && user_id) {
-           // FIX: explicitly cast user_id to string for TypeScript
-           const integerUserId = await getIntegerUserIdFromAuthUuid(user_id as string);
-           
-           await supabase
-               .from('payments')
-               .update({ is_default: false })
-               .eq('user_id', integerUserId);
+            // FIX: explicitly cast user_id to string for TypeScript
+            const integerUserId = await getIntegerUserIdFromAuthUuid(user_id as string);
+
+            await supabase
+                .from('payments')
+                .update({ is_default: false })
+                .eq('user_id', integerUserId);
         }
 
         const { data, error } = await supabase
@@ -332,7 +353,7 @@ export const updatePaymentMethod = async (req: Request, res: Response): Promise<
 export const deletePaymentMethod = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        
+
         const { error } = await supabase
             .from('payments')
             .delete()
