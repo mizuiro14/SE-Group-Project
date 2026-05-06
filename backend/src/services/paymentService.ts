@@ -1,50 +1,47 @@
 import { supabase } from '../SupabaseClient';
-import { Payment, PaymentRequest, PaymentResponse, PaymentMethod } from '../types/payment';
+import { Payment, PaymentCreateRequest, PaymentUpdateRequest, PaymentType } from '../types/payment';
 import { PaymentStrategyFactory } from '../strategies/paymentStrategyFactory';
 
 export class PaymentService {
-    private static mapStrategyStatus(status?: string): 'pending' | 'completed' | 'failed' | 'refunded' {
-        if (!status) {
-            return 'pending';
-        }
+    private static async clearDefaultForUser(userId: number): Promise<void> {
+        const { error } = await supabase
+            .from('payments')
+            .update({ is_default: false, updated_at: new Date().toISOString() })
+            .eq('user_id', userId)
+            .eq('is_default', true);
 
-        const statusMap: Record<string, 'pending' | 'completed' | 'failed' | 'refunded'> = {
-            completed: 'completed',
-            pending: 'pending',
-            failed: 'failed',
-            refunded: 'refunded'
-        };
-
-        const mapped = statusMap[status];
-        if (!mapped) {
-            throw new Error(`Unsupported payment status from strategy: ${status}`);
-        }
-
-        return mapped;
+        if (error) throw new Error(`Failed to clear default payment: ${error.message}`);
     }
 
     /**
-     * Create a new payment record in the database
+     * Create a new payment method record in the database
      */
-    static async createPayment(
-        orderId: number,
-        amount: number,
-        method: PaymentMethod
-    ): Promise<Payment> {
+    static async createPaymentMethod(request: PaymentCreateRequest): Promise<Payment> {
+        const strategy = PaymentStrategyFactory.createStrategy(request.type);
+        const isValidDetails = await strategy.validateDetails(request.details);
+        if (!isValidDetails) {
+            throw new Error('Invalid payment details for selected payment type');
+        }
+
+        const normalizedDetails = strategy.normalizeDetails(request.details);
+
+        if (request.is_default) {
+            await this.clearDefaultForUser(request.user_id);
+        }
+
         const { data, error } = await supabase
             .from('payments')
             .insert({
-                order_id: orderId,
-                amount,
-                method,
-                status: 'pending',
-                payment_date: new Date().toISOString(),
+                user_id: request.user_id,
+                type: request.type,
+                is_default: Boolean(request.is_default),
+                details: normalizedDetails,
                 updated_at: new Date().toISOString()
             })
             .select()
             .single();
 
-        if (error) throw new Error(`Failed to create payment: ${error.message}`);
+        if (error) throw new Error(`Failed to create payment method: ${error.message}`);
         if (!data) throw new Error('Payment creation failed - no data returned');
 
         return data as Payment;
@@ -69,11 +66,11 @@ export class PaymentService {
     /**
      * Retrieve all payments for an order
      */
-    static async getPaymentsByOrderId(orderId: number): Promise<Payment[]> {
+    static async getPaymentsByUserId(userId: number): Promise<Payment[]> {
         const { data, error } = await supabase
             .from('payments')
             .select('*')
-            .eq('order_id', orderId)
+            .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
         if (error) throw new Error(`Failed to fetch payments: ${error.message}`);
@@ -84,19 +81,24 @@ export class PaymentService {
      * Retrieve all payments (with optional filters)
      */
     static async getAllPayments(filters?: {
-        status?: string;
-        method?: string;
+        user_id?: number;
+        type?: string;
+        is_default?: boolean;
         limit?: number;
         offset?: number;
     }): Promise<Payment[]> {
         let query = supabase.from('payments').select('*');
 
-        if (filters?.status) {
-            query = query.eq('status', filters.status);
+        if (filters?.user_id !== undefined) {
+            query = query.eq('user_id', filters.user_id);
         }
 
-        if (filters?.method) {
-            query = query.eq('method', filters.method);
+        if (filters?.type) {
+            query = query.eq('type', filters.type);
+        }
+
+        if (filters?.is_default !== undefined) {
+            query = query.eq('is_default', filters.is_default);
         }
 
         if (filters?.limit) {
@@ -111,181 +113,64 @@ export class PaymentService {
     }
 
     /**
-     * Update payment status
+     * Update payment method details
      */
-    static async updatePaymentStatus(
-        paymentId: number,
-        status: 'pending' | 'completed' | 'failed' | 'refunded'
-    ): Promise<Payment> {
+    static async updatePaymentMethod(paymentId: number, updates: PaymentUpdateRequest): Promise<Payment> {
+        if (!updates.type && updates.is_default === undefined && !updates.details) {
+            throw new Error('No updates provided');
+        }
+
+        const existing = await this.getPaymentById(paymentId);
+        if (existing.user_id === null) {
+            throw new Error('Payment method is missing user reference');
+        }
+
+        const nextType = (updates.type || existing.type) as PaymentType;
+        if (!nextType) {
+            throw new Error('Payment type is required for update');
+        }
+
+        let normalizedDetails = existing.details;
+        if (updates.details) {
+            const strategy = PaymentStrategyFactory.createStrategy(nextType);
+            const isValidDetails = await strategy.validateDetails(updates.details);
+            if (!isValidDetails) {
+                throw new Error('Invalid payment details for selected payment type');
+            }
+            normalizedDetails = strategy.normalizeDetails(updates.details);
+        }
+
+        if (updates.is_default) {
+            await this.clearDefaultForUser(existing.user_id);
+        }
+
         const { data, error } = await supabase
             .from('payments')
             .update({
-                status,
+                type: updates.type ?? existing.type,
+                is_default: updates.is_default ?? existing.is_default,
+                details: normalizedDetails,
                 updated_at: new Date().toISOString()
             })
             .eq('id', paymentId)
             .select()
             .single();
 
-        if (error) throw new Error(`Failed to update payment: ${error.message}`);
+        if (error) throw new Error(`Failed to update payment method: ${error.message}`);
         if (!data) throw new Error('Payment update failed');
 
         return data as Payment;
     }
 
     /**
-     * Process payment using strategy pattern
+     * Delete a payment method
      */
-    static async processPayment(paymentRequest: PaymentRequest): Promise<{
-        payment: Payment;
-        response: PaymentResponse;
-    }> {
-        try {
-            // Get the appropriate payment strategy
-            const strategy = PaymentStrategyFactory.createStrategy(paymentRequest.method);
+    static async deletePaymentMethod(paymentId: number): Promise<void> {
+        const { error } = await supabase
+            .from('payments')
+            .delete()
+            .eq('id', paymentId);
 
-            // Validate method-specific payment details before processing.
-            const isValidDetails = await strategy.validatePaymentDetails(paymentRequest.metadata || {});
-            if (!isValidDetails) {
-                throw new Error('Invalid payment details for selected payment method');
-            }
-
-            // Process payment through strategy
-            const paymentResponse = await strategy.processPayment(paymentRequest);
-
-            // Create payment record in database
-            let payment = await this.createPayment(
-                paymentRequest.order_id,
-                paymentRequest.amount,
-                paymentRequest.method
-            );
-
-            // Update payment status based on strategy response
-            const newStatus = this.mapStrategyStatus(paymentResponse.status);
-            payment = await this.updatePaymentStatus(payment.id, newStatus);
-
-            return {
-                payment,
-                response: {
-                    ...paymentResponse,
-                    payment_id: payment.id
-                }
-            };
-        } catch (error) {
-            throw new Error(
-                `Payment processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
-        }
-    }
-
-    /**
-     * Refund a payment
-     */
-    static async refundPayment(paymentId: number): Promise<{
-        payment: Payment;
-        response: PaymentResponse;
-    }> {
-        try {
-            // Get existing payment
-            const payment = await this.getPaymentById(paymentId);
-
-            if (payment.status === 'refunded') {
-                throw new Error('Payment is already refunded');
-            }
-
-            if (payment.status !== 'completed') {
-                throw new Error('Only completed payments can be refunded');
-            }
-
-            // Get strategy for the payment method
-            const strategy = PaymentStrategyFactory.createStrategy(payment.method as PaymentMethod);
-
-            // Process refund through strategy
-            const refundResponse = await strategy.refundPayment(paymentId, payment.amount);
-
-            // Update payment status
-            const newStatus = this.mapStrategyStatus(refundResponse.status);
-            const updatedPayment = await this.updatePaymentStatus(paymentId, newStatus);
-
-            return {
-                payment: updatedPayment,
-                response: {
-                    ...refundResponse,
-                    payment_id: paymentId
-                }
-            };
-        } catch (error) {
-            throw new Error(
-                `Refund processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
-        }
-    }
-
-    /**
-     * Get payment statistics
-     */
-    static async getPaymentStatistics(filters?: {
-        startDate?: string;
-        endDate?: string;
-    }): Promise<{
-        totalPayments: number;
-        totalAmount: number;
-        completedAmount: number;
-        pendingAmount: number;
-        failedAmount: number;
-        byMethod: Record<string, number>;
-        byStatus: Record<string, number>;
-    }> {
-        try {
-            let query = supabase.from('payments').select('*');
-
-            if (filters?.startDate) {
-                query = query.gte('created_at', filters.startDate);
-            }
-
-            if (filters?.endDate) {
-                query = query.lte('created_at', filters.endDate);
-            }
-
-            const { data, error } = await query;
-
-            if (error) throw new Error(`Failed to fetch statistics: ${error.message}`);
-
-            const payments = (data as Payment[]) || [];
-
-            const statistics = {
-                totalPayments: payments.length,
-                totalAmount: 0,
-                completedAmount: 0,
-                pendingAmount: 0,
-                failedAmount: 0,
-                byMethod: {} as Record<string, number>,
-                byStatus: {} as Record<string, number>
-            };
-
-            payments.forEach(payment => {
-                statistics.totalAmount += payment.amount;
-
-                if (payment.status === 'completed') {
-                    statistics.completedAmount += payment.amount;
-                } else if (payment.status === 'pending') {
-                    statistics.pendingAmount += payment.amount;
-                } else if (payment.status === 'failed') {
-                    statistics.failedAmount += payment.amount;
-                }
-
-                // Count by method
-                statistics.byMethod[payment.method] = (statistics.byMethod[payment.method] || 0) + 1;
-
-                // Count by status
-                statistics.byStatus[payment.status] = (statistics.byStatus[payment.status] || 0) + 1;
-            });
-
-            return statistics;
-        } catch (error) {
-            throw new Error(
-                `Failed to generate statistics: ${error instanceof Error ? error.message : 'Unknown error'}`
-            );
-        }
+        if (error) throw new Error(`Failed to delete payment method: ${error.message}`);
     }
 }

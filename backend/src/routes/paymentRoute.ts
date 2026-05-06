@@ -2,40 +2,39 @@ import express, { Router } from 'express';
 import {
     createPayment,
     getPaymentById,
-    getPaymentsByOrderId,
     getAllPayments,
-    refundPayment,
-    getPaymentStatistics,
+    getPaymentsByUserId,
     createPaymentMethod,
     getUserPaymentMethods,
     updatePaymentMethod,
-    deletePaymentMethod
+    deletePaymentMethod,
+    updatePaymentMethodForUser,
+    deletePaymentMethodForUser
 } from '../controllers/paymentController';
 
 const paymentRouter: Router = express.Router();
 
 /**
- * POST /payments - Create a new payment
- * Body: { order_id: number, amount: number, method: PaymentMethod, metadata?: object }
+ * POST /payments - Create a new payment method
+ * Body: { user_id: number, type: PaymentType, is_default?: boolean, details: object }
  */
 paymentRouter.post('/', createPayment);
 
 /**
- * GET /payments - Get all payments with optional filters
- * Query: ?status=pending&method=credit_card&limit=10&offset=0
+ * GET /payments - Get all payment methods with optional filters
+ * Query: ?user_id=1&type=credit_card&is_default=true&limit=10&offset=0
  */
 paymentRouter.get('/', getAllPayments);
 
 /**
- * GET /payments/order/:orderId - Get all payments for a specific order
+ * GET /payments/user/:userId - Get all payment methods for a user
  */
-paymentRouter.get('/order/:orderId', getPaymentsByOrderId);
+paymentRouter.get('/user/:userId', getPaymentsByUserId);
 
 /**
- * GET /payments/statistics - Get payment statistics
- * Query: ?startDate=2024-01-01&endDate=2024-12-31
+ * PATCH /payments/:id - Update a payment method
  */
-paymentRouter.get('/statistics', getPaymentStatistics);
+paymentRouter.patch('/:id', updatePaymentMethod);
 
 // ==========================================
 // EXACT MATCH ROUTES (MUST GO BEFORE /:id)
@@ -48,22 +47,22 @@ paymentRouter.post('/methods', createPaymentMethod);
 paymentRouter.get('/methods/:userId', getUserPaymentMethods);
 
 // Update a saved method
-paymentRouter.put('/methods/:id', updatePaymentMethod);
+paymentRouter.put('/methods/:id', updatePaymentMethodForUser);
 
 // Delete a saved method
-paymentRouter.delete('/methods/:id', deletePaymentMethod);
+paymentRouter.delete('/methods/:id', deletePaymentMethodForUser);
 
 // ==========================================
 // DYNAMIC / PARAMETER ROUTES (MUST GO LAST)
 // ==========================================
 
 /**
- * POST /payments/:id/refund - Refund a payment
+ * DELETE /payments/:id - Delete a payment method
  */
-paymentRouter.post('/:id/refund', refundPayment);
+paymentRouter.delete('/:id', deletePaymentMethod);
 
 /**
- * GET /payments/:id - Get payment by ID
+ * GET /payments/:id - Get payment method by ID
  */
 paymentRouter.get('/:id', getPaymentById);
 
