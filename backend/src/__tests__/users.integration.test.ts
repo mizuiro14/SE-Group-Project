@@ -9,7 +9,7 @@ import { supabase, supabaseAdmin } from '../SupabaseClient';
 // Set up a test Express app with routes
 const createTestApp = (): Express => {
   const app = express();
-  
+
   app.use(express.json());
   app.use(cookieParser());
 
@@ -231,7 +231,7 @@ describe('Users Table Integration Tests', () => {
         .set('Cookie', authToken)
         .send(updateData);
 
-      expect([200, 400, 401]).toContain(res.status); //! should  be one of the 3
+      expect(res.status).toBe(200);
     });
 
     it('should fail without authentication', async () => {
