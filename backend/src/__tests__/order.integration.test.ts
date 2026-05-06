@@ -139,7 +139,7 @@ describe('Order Integration Tests', () => {
                 .send({ items: [{ product_id: 1, quantity: 1, unit_price: 1 }] });
 
             expect(res.status).toBe(400);
-            expect(res.body.error).toBe('user_id and items are required');
+            expect(res.body.error).toBe('A valid user identifier and items are required');
             expect(orderService.createOrder).not.toHaveBeenCalled();
         });
 
@@ -149,7 +149,7 @@ describe('Order Integration Tests', () => {
                 .send({ user_id: 1, items: [] });
 
             expect(res.status).toBe(400);
-            expect(res.body.error).toBe('user_id and items are required');
+            expect(res.body.error).toBe('A valid user identifier and items are required');
         });
 
         it('returns 400 when an item misses required fields', async () => {

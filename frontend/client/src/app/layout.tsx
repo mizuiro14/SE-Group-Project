@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { ThemeProvider } from "@/theme/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { Toaster } from 'react-hot-toast';
 import { PaymentProvider } from '@/context/PaymentContext';
 
 const inter = Inter({ subsets: ["latin"] });
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <AuthProvider>
             <PaymentProvider> 
+              <Toaster position="top-right" />
               <Navbar />
               {children}
             </PaymentProvider> 

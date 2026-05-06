@@ -32,10 +32,10 @@ export const searchUser = async (query: string): Promise<User[]> => {
 };
 
 export const searchUserByEmail = async (userEmail: string): Promise<User | null> => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from("users")
         .select("*")
-        .eq("user_email", userEmail)
+        .ilike("user_email", userEmail)
         .single();
 
     if (error && error.code !== 'PGRST116') throw new Error(error.message);
@@ -57,15 +57,15 @@ export const createUser = async (userData: User | User[]): Promise<User[]> => {
     if (error) {
         throw new Error(error.message);
     }
-    
+
     // Safety check in case selection returns null
     if (!insertedUsers) return [];
-    
+
     // Insert into the `seller` or `buyer` table based on the role
     for (let i = 0; i < dataList.length; i++) {
         const userId = insertedUsers[i].id;
         const role = dataList[i].role;
-        
+
         if (role === 'seller' && dataList[i].branch) {
             const { error: sellerError } = await supabaseAdmin
                 .from('seller')
@@ -73,7 +73,7 @@ export const createUser = async (userData: User | User[]): Promise<User[]> => {
                     user_id: userId,
                     branch: dataList[i].branch
                 });
-                
+
             if (sellerError) {
                 console.error("Failed to insert seller data:", sellerError.message);
             }
@@ -83,7 +83,7 @@ export const createUser = async (userData: User | User[]): Promise<User[]> => {
                 .insert({
                     user_id: userId
                 });
-                
+
             if (buyerError) {
                 console.error("Failed to insert buyer data:", buyerError.message);
             }
@@ -117,14 +117,14 @@ export const updateSupabaseUser = async (userId: string, data: any) => {
     // 2. Also try to keep custom public.users table in sync
     try {
         await supabaseAdmin.from('users')
-            .update({ 
+            .update({
                 username: `${data.first_name} ${data.last_name}`.trim(),
                 user_email: data.email,
-                cellphone_number: data.contact 
+                cellphone_number: data.contact
             })
             // Match the email from the backend payload
             .eq('user_email', data.email);
-    } catch(err) {
+    } catch (err) {
         console.log('Note: Failed to sync public.users table, but auth was updated');
     }
 
@@ -143,7 +143,7 @@ export const deleteTestUser = async (email: string) => {
         .eq('user_email', email);
 
     if (error) throw new Error(error.message);
-    
+
     // Note: If your Supabase is set up correctly with "Cascade" deletes, 
     // deleting this user will automatically delete their products too!
     return true;

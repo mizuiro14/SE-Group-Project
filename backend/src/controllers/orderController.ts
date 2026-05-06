@@ -14,7 +14,12 @@ const parseStringOrUndefined = (param: any): string | undefined => {
 
 export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orders = await orderService.getAllOrders();
+        const { status, seller_id } = req.query;
+        const filters: any = {};
+        if (status) filters.status = parseStringParam(status as any);
+        if (seller_id) filters.seller_id = parseStringParam(seller_id as any);
+
+        const orders = await orderService.getAllOrders(filters);
         res.status(200).json(orders);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -89,18 +94,18 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
             if (error || !data) {
                 const { data: newUser, error: insertError } = await supabaseAdmin
                     .from('users')
-                    .insert({ 
-                        user_email: email, 
-                        username: email.split('@')[0] || 'UnknownBuyer', 
-                        role: 'buyer' 
+                    .insert({
+                        user_email: email,
+                        username: email.split('@')[0] || 'UnknownBuyer',
+                        role: 'buyer'
                     })
                     .select('id')
                     .single();
 
                 if (insertError || !newUser) {
-                     console.error("Self-Heal Database Error:", insertError);
-                     res.status(500).json({ error: 'Could not self-heal missing database user' });
-                     return;
+                    console.error("Self-Heal Database Error:", insertError);
+                    res.status(500).json({ error: 'Could not self-heal missing database user' });
+                    return;
                 }
                 data = newUser;
             }

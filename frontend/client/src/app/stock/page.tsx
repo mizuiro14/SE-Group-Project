@@ -5,6 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import { Search, Bell, ShoppingCart, Image as ImageIcon, X, Check, Loader2 } from "lucide-react";
 import { useTheme } from "@/theme/ThemeContext";
 import { useAuth } from '@/context/AuthContext';
+import toast from 'react-hot-toast';
 
 // Define a Product type that includes enough data for our cards
 interface Product {
@@ -116,7 +117,7 @@ export default function StockPage() {
     if (!productToReorder || reorderAmount <= 0) return;
 
     if (!productToReorder.id || productToReorder.id === "undefined" || isNaN(Number(productToReorder.id))) {
-       alert("Cannot update this item: Invalid Product ID. Try refreshing the page to load official database products.");
+       toast.error("Cannot update this item: Invalid Product ID. Try refreshing the page to load official database products.");
        setProductToReorder(null);
        return;
     }
@@ -151,7 +152,7 @@ export default function StockPage() {
       setReorderAmount(10);
     } catch (error: any) {
       console.error("Restock error:", error);
-      alert(`Backend rejected: ${error.message}`);
+      toast.error(`Backend rejected: ${error.message}`);
     } finally {
       setIsReordering(false);
     }
@@ -165,7 +166,7 @@ export default function StockPage() {
     if (!targetProduct) return;
 
     if (!targetProduct.id || targetProduct.id === "undefined" || isNaN(Number(targetProduct.id))) {
-       alert("Invalid Product ID.");
+       toast.error("Invalid Product ID.");
        return;
     }
 
@@ -201,7 +202,7 @@ export default function StockPage() {
       setAddStockAmount(10);
     } catch (error: any) {
       console.error("Add stock error:", error);
-      alert(`Backend rejected: ${error.message}`);
+      toast.error(`Backend rejected: ${error.message}`);
     } finally {
       setIsAddingStock(false);
     }
