@@ -12,7 +12,43 @@ export interface Product {
     sku: string | null;
     created_at: string;
     updated_at: string;
+    image_url?: string | null;
 }
+
+type ProductImageRow = {
+    product_id: number;
+    image_url: string;
+    created_at: string;
+};
+
+const attachProductImages = async (products: Product[]): Promise<Product[]> => {
+    if (products.length === 0) {
+        return products;
+    }
+
+    const productIds = products.map((product) => product.id);
+    const { data, error } = await supabaseAdmin
+        .from('images')
+        .select('product_id, image_url, created_at')
+        .in('product_id', productIds)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    const imageMap = new Map<number, string>();
+    (data as ProductImageRow[] | null || []).forEach((row) => {
+        if (!imageMap.has(row.product_id)) {
+            imageMap.set(row.product_id, row.image_url);
+        }
+    });
+
+    return products.map((product) => ({
+        ...product,
+        image_url: imageMap.get(product.id) ?? null
+    }));
+};
 
 export const getAllProducts = async (filters?: {
     category_id?: number;
@@ -43,14 +79,15 @@ export const getAllProducts = async (filters?: {
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return (data || []).map((item: any) => ({
+    const products = (data || []).map((item: any) => ({
         ...item,
         category: item.categories?.name || null
     }));
+    return attachProductImages(products);
 };
 
 export const getProductById = async (id: number): Promise<Product> => {
-    const { data, error } = await supabase            
+    const { data, error } = await supabase
         .from('products')
         .select('*')
         .eq('id', id)
@@ -58,7 +95,8 @@ export const getProductById = async (id: number): Promise<Product> => {
 
     if (error) throw new Error(error.message);
     if (!data) throw new Error('Product not found');
-    return data;
+    const [productWithImage] = await attachProductImages([data as Product]);
+    return productWithImage;
 };
 
 export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'category'>): Promise<Product> => {
@@ -114,7 +152,7 @@ export const getProductsByCategoryId = async (categoryId: number): Promise<Produ
         .order('name', { ascending: true });
 
     if (error) throw new Error(error.message);
-    return data || [];
+    return attachProductImages((data as Product[]) || []);
 };
 
 export const getBestSellers = async (limit: number = 5): Promise<Product[]> => {
@@ -126,7 +164,7 @@ export const getBestSellers = async (limit: number = 5): Promise<Product[]> => {
         .limit(limit);
 
     if (error) throw new Error(error.message);
-    return data || [];
+    return attachProductImages((data as Product[]) || []);
 };
 
 export const searchProducts = async (query: string): Promise<Product[]> => {
@@ -137,7 +175,7 @@ export const searchProducts = async (query: string): Promise<Product[]> => {
         .order('name', { ascending: true });
 
     if (error) throw new Error(error.message);
-    return data || [];
+    return attachProductImages((data as Product[]) || []);
 };
 
 export const updateProductQuantity = async (id: number, quantity: number): Promise<Product> => {

@@ -9,7 +9,7 @@ import { useTheme } from '@/theme/ThemeContext'; // <-- Import the hook
 import { useAuth } from '@/context/AuthContext';
 
 export default function Sidebar() {
-  const { user, isSeller } = useAuth();
+  const { user, isSeller, isBuyer } = useAuth();
   const pathname = usePathname();
   const { theme } = useTheme(); // <-- Get the global theme
 
@@ -23,14 +23,14 @@ export default function Sidebar() {
     <aside className={`w-64 ${theme.surface} border-r ${theme.border} flex flex-col justify-between shrink-0 transition-colors duration-300`}>
       <div>
         <div className="p-6 flex items-center gap-3">
-          <Image 
-            src="/BrandLogo.png" 
-            alt="Brand Logo" 
-            width={40} 
-            height={40} 
+          <Image
+            src="/BrandLogo.png"
+            alt="Brand Logo"
+            width={40}
+            height={40}
             className={`h-10 w-10 rounded-full border ${theme.border} object-cover bg-white`}
           />
-          <Link href="/" className={`text-xl font-bold tracking-tight whitespace-nowrap truncate hover:opacity-80 ${theme.textPrimary}`}>
+          <Link href="/marketplace" className={`text-xl font-bold tracking-tight whitespace-nowrap truncate hover:opacity-80 ${theme.textPrimary}`}>
             I Am Barley
           </Link>
         </div>
@@ -59,12 +59,14 @@ export default function Sidebar() {
                   </Link>
                 </li>
               )}
-              <li>
-                <Link href="/delivery" className={isActive('/delivery') ? activeClass : inactiveClass}>
-                  <Truck className={`w-5 h-5 ${isActive('/delivery') ? 'text-green-700' : theme.textSecondary}`} />
-                  Delivery Page
-                </Link>
-              </li>
+              {!isBuyer && (
+                <li>
+                  <Link href="/delivery" className={isActive('/delivery') ? activeClass : inactiveClass}>
+                    <Truck className={`w-5 h-5 ${isActive('/delivery') ? 'text-green-700' : theme.textSecondary}`} />
+                    Delivery Page
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
           <div>
@@ -86,17 +88,20 @@ export default function Sidebar() {
           </div>
         </nav>
       </div>
-      
+
       {user && (
         <div className={`p-4 border-t ${theme.border}`}>
-          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg ${theme.surfaceHover} cursor-pointer transition-colors max-w-full overflow-hidden`}>
-             <div className="flex flex-col min-w-0">
+          <Link
+            href="/profile"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg ${theme.surfaceHover} cursor-pointer transition-colors max-w-full overflow-hidden`}
+          >
+            <div className="flex flex-col min-w-0">
               <span className={`text-sm font-semibold truncate ${theme.textPrimary}`}>
                 {user?.user_metadata?.username || user?.username || 'User'}
               </span>
               <span className={`text-xs truncate ${theme.textSecondary}`}>Premium Member</span>
             </div>
-          </div>
+          </Link>
         </div>
       )}
     </aside>

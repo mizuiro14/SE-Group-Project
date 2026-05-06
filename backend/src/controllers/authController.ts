@@ -40,10 +40,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         // Securely attach the token as an HTTP-only cookie
         if (data.session) {
             res.cookie('access_token', data.session.access_token, {
-                httpOnly: true, // Prevents JavaScript/XSS attacks from reading the cookie
-                secure: process.env.NODE_ENV === 'production', // Uses HTTPS in production
-                sameSite: 'lax',
-                maxAge: 3600 * 1000 // Expires in 1 hour
+                httpOnly: true, 
+                secure: true,      // Required for Vercel/Render
+                sameSite: 'none',  // Required for Vercel/Render
+                maxAge: 3600 * 1000 
             });
         }
 
@@ -56,20 +56,34 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const logout = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    // Check for the token inside req.cookies instead of req.headers
     const token = req.cookies?.access_token;
+
+    // 1. Define cookieOptions BEFORE doing any response handling
+    const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const
+    };
 
     try {
         if (token) {
             await authService.logout(token);
         }
         
-        // --- CLEAR COOKIE ---
-        // Telling the browser to delete the cookie so they stay logged out
-        res.clearCookie('access_token');
+        // 2. Use cookieOptions in the clearCookie call
+        res.clearCookie('access_token', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none'
+        });
         res.status(200).json({ message: 'Logged out successfully' });
     } catch (err: any) {
-        res.clearCookie('access_token'); // Ensure cookie is cleared even if Supabase throws an error
+        // 3. Use cookieOptions here as well
+        res.clearCookie('access_token', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none'
+        });
         res.status(500).json({ error: err.message });
     }
 };

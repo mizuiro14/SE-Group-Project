@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Download, Plus, Bell, ShoppingCart, MapPin, Truck, CheckCircle2, AlertTriangle, Package, Check, X, Trash2, RefreshCcw } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { useTheme } from '@/theme/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 
 type ShippingStatus = 'pending' | 'shipped' | 'delivered' | 'cancelled';
 
@@ -13,7 +14,7 @@ type Shipping = {
   status: ShippingStatus;
   shipped_date: string | null;
   delivered_date: string | null;
-  issue_reason?: string | null; 
+  issue_reason?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -26,7 +27,11 @@ type Order = {
   created_at: string;
 };
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (() => {
+  const rawBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const trimmed = rawBase.replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+})();
 
 const STATUS_LABELS: Record<ShippingStatus, string> = {
   pending: 'Queued',
@@ -72,18 +77,19 @@ const getStatusBadgeClass = (status: ShippingStatus, isDarkMode: boolean): strin
 
 export default function DeliveryPage() {
   const { theme, isDarkMode } = useTheme();
-  
+  const { user, isSeller, loading } = useAuth();
+
   const [shippings, setShippings] = useState<Shipping[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  
+
   const [activeShippingId, setActiveShippingId] = useState<number | null>(null);
-  
+
   // New Delivery Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalForm, setModalForm] = useState({ orderId: '', address: '' });
@@ -97,13 +103,17 @@ export default function DeliveryPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [shippingToDelete, setShippingToDelete] = useState<number | null>(null);
 
-  const loadShippingsAndOrders = async (): Promise<void> => {
+  const loadShippingsAndOrders = async (sellerId?: string): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
 
       // Fetch Shippings
-      const shipRes = await fetch(`${API_BASE_URL}/shipping`);
+      const shippingParams = new URLSearchParams();
+      if (sellerId) shippingParams.set('seller_id', sellerId);
+      const shippingUrl = `${API_BASE_URL}/shipping${shippingParams.toString() ? `?${shippingParams.toString()}` : ''}`;
+
+      const shipRes = await fetch(shippingUrl);
       if (!shipRes.ok) throw new Error(`Failed to load deliveries`);
       const shipData = (await shipRes.json()) as Shipping[];
       setShippings(shipData);
@@ -113,10 +123,15 @@ export default function DeliveryPage() {
       }
 
       // Fetch Orders (to show in the select list)
-      const orderRes = await fetch(`${API_BASE_URL}/orders`);
+      const orderParams = new URLSearchParams();
+      if (sellerId) orderParams.set('seller_id', sellerId);
+      orderParams.set('status', 'pending');
+      const ordersUrl = `${API_BASE_URL}/orders${orderParams.toString() ? `?${orderParams.toString()}` : ''}`;
+
+      const orderRes = await fetch(ordersUrl);
       if (orderRes.ok) {
-         const orderData = await orderRes.json();
-         setOrders(orderData);
+        const orderData = await orderRes.json();
+        setOrders(orderData);
       }
 
     } catch (err: any) {
@@ -127,9 +142,10 @@ export default function DeliveryPage() {
   };
 
   useEffect(() => {
-    void loadShippingsAndOrders();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (loading) return;
+    if (isSeller && !user?.id) return;
+    void loadShippingsAndOrders(isSeller ? user?.id : undefined);
+  }, [isSeller, user?.id, loading]);
 
   const filteredShippings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -162,110 +178,110 @@ export default function DeliveryPage() {
   // ============================
 
   const handleOpenModal = () => {
-      setModalForm({ orderId: '', address: '' });
-      setModalError(null);
-      setIsModalOpen(true);
+    setModalForm({ orderId: '', address: '' });
+    setModalError(null);
+    setIsModalOpen(true);
   };
 
   const submitShippingModal = async (): Promise<void> => {
-      const orderId = Number(modalForm.orderId);
-      
-      if (!modalForm.orderId || !Number.isFinite(orderId)) {
-        setModalError('Please select a valid Order.');
-        return;
-      }
-      if (!modalForm.address.trim()) {
-        setModalError('Please enter a delivery address.');
-        return;
+    const orderId = Number(modalForm.orderId);
+
+    if (!modalForm.orderId || !Number.isFinite(orderId)) {
+      setModalError('Please select a valid Order.');
+      return;
+    }
+    if (!modalForm.address.trim()) {
+      setModalError('Please enter a delivery address.');
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      setModalError(null);
+      const response = await fetch(`${API_BASE_URL}/shipping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, address: modalForm.address }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error ?? `Failed to create delivery`);
       }
 
-      try {
-        setIsCreating(true);
-        setModalError(null);
-        const response = await fetch(`${API_BASE_URL}/shipping`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderId, address: modalForm.address }),
-        });
-
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.error ?? `Failed to create delivery`);
-        }
-
-        await loadShippingsAndOrders();
-        setIsModalOpen(false); 
-      } catch (err: any) {
-        setModalError(err?.message ?? 'Failed to create delivery.');
-      } finally {
-        setIsCreating(false);
-      }
+      await loadShippingsAndOrders(isSeller ? user?.id : undefined);
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setModalError(err?.message ?? 'Failed to create delivery.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const promptDeleteShipping = (e: React.MouseEvent, shippingId: number) => {
-      e.stopPropagation();
-      setShippingToDelete(shippingId);
-      setIsDeleteModalOpen(true);
+    e.stopPropagation();
+    setShippingToDelete(shippingId);
+    setIsDeleteModalOpen(true);
   };
 
   const confirmDeleteShipping = async () => {
-      if (!shippingToDelete) return;
-      try {
-          setIsUpdating(true);
-          setError(null);
-          const response = await fetch(`${API_BASE_URL}/shipping/${shippingToDelete}`, { method: 'DELETE' });
-          
-          if (!response.ok) throw new Error("Failed to delete shipping record");
-          
-          // Remove locally without fetching all data again to save time
-          setShippings(prev => prev.filter(s => s.id !== shippingToDelete));
-          if (activeShippingId === shippingToDelete) setActiveShippingId(null);
-          
-          setIsDeleteModalOpen(false);
-          setShippingToDelete(null);
-      } catch(err: any) {
-          setError(err?.message ?? "Error deleting shipping record");
-      } finally {
-          setIsUpdating(false);
-      }
+    if (!shippingToDelete) return;
+    try {
+      setIsUpdating(true);
+      setError(null);
+      const response = await fetch(`${API_BASE_URL}/shipping/${shippingToDelete}`, { method: 'DELETE' });
+
+      if (!response.ok) throw new Error("Failed to delete shipping record");
+
+      // Remove locally without fetching all data again to save time
+      setShippings(prev => prev.filter(s => s.id !== shippingToDelete));
+      if (activeShippingId === shippingToDelete) setActiveShippingId(null);
+
+      setIsDeleteModalOpen(false);
+      setShippingToDelete(null);
+    } catch (err: any) {
+      setError(err?.message ?? "Error deleting shipping record");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const changeShippingStatus = async (shippingId: number, targetStatus: ShippingStatus, reason?: string) => {
-      try {
-          setIsUpdating(true);
-          setError(null);
+    try {
+      setIsUpdating(true);
+      setError(null);
 
-          const payload: any = { status: targetStatus };
-          if (reason) payload.issue_reason = reason; // Attach the reason to payload
+      const payload: any = { status: targetStatus };
+      if (reason) payload.issue_reason = reason; // Attach the reason to payload
 
-          const response = await fetch(`${API_BASE_URL}/shipping/${shippingId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
+      const response = await fetch(`${API_BASE_URL}/shipping/${shippingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData?.error ?? `Failed to update delivery`);
-          }
-
-          const updatedShipping = (await response.json()) as Shipping;
-          setShippings((prev) => prev.map((s) => (s.id === updatedShipping.id ? updatedShipping : s)));
-          
-          if (isIssueModalOpen) setIsIssueModalOpen(false);
-          setIssueReason('');
-
-      } catch (err: any) {
-        setError(err?.message ?? 'Failed to update delivery.');
-      } finally {
-          setIsUpdating(false);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData?.error ?? `Failed to update delivery`);
       }
+
+      const updatedShipping = (await response.json()) as Shipping;
+      setShippings((prev) => prev.map((s) => (s.id === updatedShipping.id ? updatedShipping : s)));
+
+      if (isIssueModalOpen) setIsIssueModalOpen(false);
+      setIssueReason('');
+
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to update delivery.');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   // Helper method specifically for the issue modal
   const submitIssueReason = () => {
-       if (!activeShippingId) return;
-       changeShippingStatus(activeShippingId, 'cancelled', issueReason);
+    if (!activeShippingId) return;
+    changeShippingStatus(activeShippingId, 'cancelled', issueReason);
   };
 
 
@@ -378,7 +394,7 @@ export default function DeliveryPage() {
               </div>
 
               <div className="flex flex-1 gap-6 overflow-x-auto pb-2">
-                
+
                 {/* Column: Queued */}
                 <div className={`w-[340px] shrink-0 flex flex-col ${theme.background} rounded-lg p-4 transition-colors duration-300`}>
                   <div className="flex items-center justify-between mb-4">
@@ -396,13 +412,13 @@ export default function DeliveryPage() {
                           <span className={theme.textSecondary}>{shipping.address}</span>
                         </div>
                         {/* QUEUED ACTION BUTTON - INLINE STYLED */}
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); changeShippingStatus(shipping.id, 'shipped'); }}
-                            disabled={isUpdating}
-                            style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
-                            className="w-full font-bold py-2 rounded-lg text-sm flex justify-center items-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+                        <button
+                          onClick={(e) => { e.stopPropagation(); changeShippingStatus(shipping.id, 'shipped'); }}
+                          disabled={isUpdating}
+                          style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
+                          className="w-full font-bold py-2 rounded-lg text-sm flex justify-center items-center gap-2 shadow-sm transition-colors disabled:opacity-50"
                         >
-                            <Truck className="w-4 h-4" /> Move to Transit
+                          <Truck className="w-4 h-4" /> Move to Transit
                         </button>
                       </div>
                     ))}
@@ -422,30 +438,30 @@ export default function DeliveryPage() {
                       <div key={shipping.id} className={`${theme.surface} p-5 rounded-lg shadow-sm border-2 ${activeShippingId === shipping.id ? 'border-green-500' : 'border-yellow-500/50'} relative cursor-pointer`} onClick={() => setActiveShippingId(shipping.id)}>
                         <h4 className={`font-bold ${theme.textPrimary} mb-2`}>ORD-{shipping.order_id}</h4>
                         <div className="flex items-center justify-between text-sm mb-4">
-                           <span className={`${theme.textSecondary} flex items-center gap-1.5`}><Truck className="w-4 h-4" /> Transit</span>
-                           <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">Active</span>
+                          <span className={`${theme.textSecondary} flex items-center gap-1.5`}><Truck className="w-4 h-4" /> Transit</span>
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">Active</span>
                         </div>
-                        
+
                         {/* IN TRANSIT ACTION BUTTONS */}
                         <div className="flex gap-2">
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); changeShippingStatus(shipping.id, 'delivered'); }}
-                                disabled={isUpdating}
-                                className="flex-1 bg-green-700 hover:bg-green-800 text-white font-medium py-1.5 rounded-lg text-xs flex justify-center items-center transition-colors disabled:opacity-50"
-                            >
-                                <Check size={14} className="mr-1"/> Delivered
-                            </button>
-                            <button 
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    setActiveShippingId(shipping.id);
-                                    setIsIssueModalOpen(true); 
-                                }}
-                                disabled={isUpdating}
-                                className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1.5 rounded-lg text-xs flex justify-center items-center transition-colors disabled:opacity-50"
-                            >
-                                <AlertTriangle size={14} className="mr-1"/> Report Issue
-                            </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); changeShippingStatus(shipping.id, 'delivered'); }}
+                            disabled={isUpdating}
+                            className="flex-1 bg-green-700 hover:bg-green-800 text-white font-medium py-1.5 rounded-lg text-xs flex justify-center items-center transition-colors disabled:opacity-50"
+                          >
+                            <Check size={14} className="mr-1" /> Delivered
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveShippingId(shipping.id);
+                              setIsIssueModalOpen(true);
+                            }}
+                            disabled={isUpdating}
+                            className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1.5 rounded-lg text-xs flex justify-center items-center transition-colors disabled:opacity-50"
+                          >
+                            <AlertTriangle size={14} className="mr-1" /> Report Issue
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -465,16 +481,16 @@ export default function DeliveryPage() {
                       <div key={shipping.id} className={`${theme.surface} p-4 rounded-lg border ${theme.border} cursor-pointer relative hover:border-red-500/50`} onClick={() => setActiveShippingId(shipping.id)}>
                         <span className={`font-bold ${theme.textPrimary} text-sm`}>ORD-{shipping.order_id}</span>
                         <p className={`text-xs ${theme.textSecondary} mt-2 mb-3`}>Done: {formatDate(shipping.updated_at)}</p>
-                        
+
                         {/* DELIVERED ACTION BUTTONS (DELETE) */}
                         <div className="flex justify-end">
-                            <button 
-                                onClick={(e) => promptDeleteShipping(e, shipping.id)}
-                                disabled={isUpdating}
-                                className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 font-medium rounded-lg text-xs flex justify-center items-center transition-all disabled:opacity-50"
-                            >
-                                <Trash2 size={14} className="mr-1.5"/> Delete Record
-                            </button>
+                          <button
+                            onClick={(e) => promptDeleteShipping(e, shipping.id)}
+                            disabled={isUpdating}
+                            className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 font-medium rounded-lg text-xs flex justify-center items-center transition-all disabled:opacity-50"
+                          >
+                            <Trash2 size={14} className="mr-1.5" /> Delete Record
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -492,21 +508,21 @@ export default function DeliveryPage() {
                       <div key={shipping.id} className={`${theme.surface} p-4 rounded-lg border border-red-500/50 hover:bg-red-500/5 cursor-pointer`} onClick={() => setActiveShippingId(shipping.id)}>
                         <span className={`font-bold ${theme.textPrimary} text-sm`}>ORD-{shipping.order_id}</span>
                         <p className="text-xs text-red-500 font-bold mt-2 flex items-center gap-1">
-                            <AlertTriangle size={12}/> Needs Attention
+                          <AlertTriangle size={12} /> Needs Attention
                         </p>
                         {shipping.issue_reason && (
-                           <p className="text-xs mt-2 italic text-gray-500 mb-4">"{shipping.issue_reason}"</p>
+                          <p className="text-xs mt-2 italic text-gray-500 mb-4">"{shipping.issue_reason}"</p>
                         )}
-                        
+
                         {/* ISSUES ACTION BUTTONS (RE-QUEUE) */}
                         <div className="mt-4 pt-4 border-t border-red-100 dark:border-red-900/30 flex justify-end">
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); changeShippingStatus(shipping.id, 'pending'); }}
-                                disabled={isUpdating}
-                                className="px-3 py-1.5 bg-white dark:bg-gray-800 text-blue-600 border border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium rounded-lg text-xs flex justify-center items-center transition-all disabled:opacity-50"
-                            >
-                                <RefreshCcw size={14} className="mr-1.5"/> Back to Queued
-                            </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); changeShippingStatus(shipping.id, 'pending'); }}
+                            disabled={isUpdating}
+                            className="px-3 py-1.5 bg-white dark:bg-gray-800 text-blue-600 border border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium rounded-lg text-xs flex justify-center items-center transition-all disabled:opacity-50"
+                          >
+                            <RefreshCcw size={14} className="mr-1.5" /> Back to Queued
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -515,43 +531,43 @@ export default function DeliveryPage() {
 
               </div>
             </div>
-            
+
             {/* -------------------- SIDEBAR TRACKING DETAILS -------------------- */}
             <div className={`w-[320px] shrink-0 ${theme.surface} rounded-xl border ${theme.border} shadow-sm flex flex-col overflow-hidden`}>
-               <div className={`p-5 border-b ${theme.border} flex items-center gap-2 ${theme.background}`}>
-                 <MapPin className="w-5 h-5 text-green-700" />
-                 <h2 className={`font-semibold ${theme.textPrimary}`}>Details Tracker</h2>
-               </div>
-               
-               <div className="p-5 flex-1 flex flex-col">
-                  {activeShipping ? (
-                      <>
-                        <h3 className={`text-lg font-bold ${theme.textPrimary}`}>Order #{activeShipping.order_id}</h3>
-                        <span className={`inline-block px-2 py-1 mt-2 text-[10px] uppercase font-bold rounded w-max ${getStatusBadgeClass(activeShipping.status, isDarkMode)}`}>
-                            {STATUS_LABELS[activeShipping.status]}
-                        </span>
-                        
-                        <div className="mt-6 space-y-4 text-sm">
-                            <div>
-                               <p className="font-bold text-gray-500 text-xs uppercase mb-1">Delivery Address</p>
-                               <p className={theme.textPrimary}>{activeShipping.address}</p>
-                            </div>
-                            <div>
-                               <p className="font-bold text-gray-500 text-xs uppercase mb-1">Last Updated</p>
-                               <p className={theme.textPrimary}>{formatDate(activeShipping.updated_at)}</p>
-                            </div>
-                            {activeShipping.issue_reason && (
-                                <div className="p-3 bg-red-100 rounded text-red-800 text-sm border border-red-200">
-                                   <p className="font-bold mb-1">Reported Issue:</p>
-                                   <p>{activeShipping.issue_reason}</p>
-                                </div>
-                            )}
+              <div className={`p-5 border-b ${theme.border} flex items-center gap-2 ${theme.background}`}>
+                <MapPin className="w-5 h-5 text-green-700" />
+                <h2 className={`font-semibold ${theme.textPrimary}`}>Details Tracker</h2>
+              </div>
+
+              <div className="p-5 flex-1 flex flex-col">
+                {activeShipping ? (
+                  <>
+                    <h3 className={`text-lg font-bold ${theme.textPrimary}`}>Order #{activeShipping.order_id}</h3>
+                    <span className={`inline-block px-2 py-1 mt-2 text-[10px] uppercase font-bold rounded w-max ${getStatusBadgeClass(activeShipping.status, isDarkMode)}`}>
+                      {STATUS_LABELS[activeShipping.status]}
+                    </span>
+
+                    <div className="mt-6 space-y-4 text-sm">
+                      <div>
+                        <p className="font-bold text-gray-500 text-xs uppercase mb-1">Delivery Address</p>
+                        <p className={theme.textPrimary}>{activeShipping.address}</p>
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-500 text-xs uppercase mb-1">Last Updated</p>
+                        <p className={theme.textPrimary}>{formatDate(activeShipping.updated_at)}</p>
+                      </div>
+                      {activeShipping.issue_reason && (
+                        <div className="p-3 bg-red-100 rounded text-red-800 text-sm border border-red-200">
+                          <p className="font-bold mb-1">Reported Issue:</p>
+                          <p>{activeShipping.issue_reason}</p>
                         </div>
-                      </>
-                  ) : (
-                      <p className={`text-sm text-center mt-10 ${theme.textSecondary}`}>Select a delivery card to view its tracking details.</p>
-                  )}
-               </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className={`text-sm text-center mt-10 ${theme.textSecondary}`}>Select a delivery card to view its tracking details.</p>
+                )}
+              </div>
             </div>
 
           </div>
@@ -565,10 +581,10 @@ export default function DeliveryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm shadow-2xl">
           <div className={`${theme.surface} p-6 rounded-xl border ${theme.border} w-[450px] shadow-lg animate-in zoom-in-95`}>
             <div className="flex justify-between items-center mb-4">
-                <h2 className={`text-xl font-bold ${theme.textPrimary}`}>Queue New Delivery</h2>
-                <button onClick={() => setIsModalOpen(false)} className={theme.textSecondary}><X size={20}/></button>
+              <h2 className={`text-xl font-bold ${theme.textPrimary}`}>Queue New Delivery</h2>
+              <button onClick={() => setIsModalOpen(false)} className={theme.textSecondary}><X size={20} /></button>
             </div>
-            
+
             {modalError && (
               <div className="mb-4 p-3 bg-red-900/30 text-red-500 rounded text-sm font-medium">
                 {modalError}
@@ -585,11 +601,11 @@ export default function DeliveryPage() {
                 >
                   <option value="" disabled>-- Pick an Order --</option>
                   {orders.map(order => {
-                      return (
-                          <option key={order.id} value={order.id}>
-                              Order #{order.id} (Status: {order.status})
-                          </option>
-                      )
+                    return (
+                      <option key={order.id} value={order.id}>
+                        Order #{order.id} (Status: {order.status})
+                      </option>
+                    );
                   })}
                 </select>
               </div>
@@ -606,13 +622,13 @@ export default function DeliveryPage() {
             </div>
 
             <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className={`px-4 py-2 font-bold text-sm ${theme.textSecondary} hover:${theme.textPrimary}`}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={submitShippingModal}
                 disabled={isCreating}
                 className="px-6 py-2 text-sm font-bold text-white bg-green-700 rounded-lg hover:bg-green-800 disabled:opacity-60 shadow-md"
@@ -629,13 +645,13 @@ export default function DeliveryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm shadow-2xl">
           <div className={`${theme.surface} p-6 rounded-xl border ${theme.border} w-[450px] shadow-lg animate-in zoom-in-95`}>
             <div className="flex items-center gap-2 mb-2 text-red-500">
-                <AlertTriangle size={24} />
-                <h2 className="text-xl font-black">Report a Delivery Issue</h2>
+              <AlertTriangle size={24} />
+              <h2 className="text-xl font-black">Report a Delivery Issue</h2>
             </div>
             <p className={`text-sm ${theme.textSecondary} mb-6`}>
-               Record the reason below to help tracking.
+              Record the reason below to help tracking.
             </p>
-            
+
             <div className="space-y-4">
               <div>
                 <label className={`block text-sm font-bold mb-1 ${theme.textSecondary}`}>Reason for exception</label>
@@ -650,13 +666,13 @@ export default function DeliveryPage() {
             </div>
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button 
+              <button
                 onClick={() => { setIsIssueModalOpen(false); setIssueReason(''); }}
                 className={`px-4 py-2 font-bold text-sm ${theme.textSecondary} hover:${theme.textPrimary}`}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={submitIssueReason}
                 disabled={isUpdating || !issueReason.trim()}
                 className="px-6 py-2 text-sm font-bold text-white bg-green-700 rounded-lg hover:bg-green-800 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -673,15 +689,15 @@ export default function DeliveryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm shadow-2xl">
           <div className={`${theme.surface} p-6 rounded-xl border ${theme.border} w-[400px] shadow-lg animate-in zoom-in-95`}>
             <div className="flex items-center gap-2 mb-2 text-red-600">
-                <Trash2 size={24} />
-                <h2 className="text-xl font-black">Delete Record?</h2>
+              <Trash2 size={24} />
+              <h2 className="text-xl font-black">Delete Record?</h2>
             </div>
             <p className={`text-sm ${theme.textSecondary} mb-6`}>
-               Are you sure you want to permanently delete this delivery record? This action cannot be undone.
+              Are you sure you want to permanently delete this delivery record? This action cannot be undone.
             </p>
-            
+
             <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button 
+              <button
                 onClick={() => { setIsDeleteModalOpen(false); setShippingToDelete(null); }}
                 disabled={isUpdating}
                 className={`px-4 py-2 font-bold text-sm ${theme.textSecondary} hover:${theme.textPrimary}`}
@@ -689,7 +705,7 @@ export default function DeliveryPage() {
                 Cancel
               </button>
               {/* DELETE CONFIRM BUTTON - INLINE STYLED */}
-              <button 
+              <button
                 onClick={confirmDeleteShipping}
                 disabled={isUpdating}
                 style={{ backgroundColor: '#dc2626', color: '#ffffff' }}

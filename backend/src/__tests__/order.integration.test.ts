@@ -144,6 +144,7 @@ describe('Order Integration Tests', () => {
 
             expect(res.status).toBe(400);
             expect(res.body.error).toBe('A valid user identifier and items are required');
+            expect(orderService.createOrder).not.toHaveBeenCalled();
         });
     });
 
@@ -154,10 +155,8 @@ describe('Order Integration Tests', () => {
                 items: [{ product_id: productId, quantity: 1, unit_price: 10 }]
             });
 
-            const res = await request(app).get('/api/orders');
-
-            expect(res.status).toBe(200);
-            expect(res.body.length).toBeGreaterThan(0);
+            expect(res.status).toBe(400);
+            expect(res.body.error).toBe('A valid user identifier and items are required');
         });
     });
 

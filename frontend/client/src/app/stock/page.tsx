@@ -5,6 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import { Search, Bell, ShoppingCart, Image as ImageIcon, X, Check, Loader2 } from "lucide-react";
 import { useTheme } from "@/theme/ThemeContext";
 import { useAuth } from '@/context/AuthContext';
+import toast from 'react-hot-toast';
 
 // Define a Product type that includes enough data for our cards
 interface Product {
@@ -35,6 +36,8 @@ export default function StockPage() {
   const [addStockAmount, setAddStockAmount] = useState<number>(10);
   const [isAddingStock, setIsAddingStock] = useState(false);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
   // Fetch products continuously or on mount
   useEffect(() => {
     const fetchStock = async () => {
@@ -44,7 +47,7 @@ export default function StockPage() {
       try {
         setLoading(true);
         // 2. Fetch using the specific seller's ID
-        const response = await fetch(`http://localhost:5000/api/products?seller_id=${user.id}`); 
+        const response = await fetch(`${API_URL}/api/products?seller_id=${user.id}`); 
         if (!response.ok) throw new Error("Failed to fetch");
         
         const data = await response.json();
@@ -114,7 +117,7 @@ export default function StockPage() {
     if (!productToReorder || reorderAmount <= 0) return;
 
     if (!productToReorder.id || productToReorder.id === "undefined" || isNaN(Number(productToReorder.id))) {
-       alert("Cannot update this item: Invalid Product ID. Try refreshing the page to load official database products.");
+       toast.error("Cannot update this item: Invalid Product ID. Try refreshing the page to load official database products.");
        setProductToReorder(null);
        return;
     }
@@ -123,7 +126,7 @@ export default function StockPage() {
     try {
       const newQuantity = Number(productToReorder.quantity) + Number(reorderAmount);
 
-      const response = await fetch(`http://localhost:5000/api/products/${productToReorder.id}/quantity`, {
+      const response = await fetch(`${API_URL}/api/products/${productToReorder.id}/quantity`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: newQuantity })
@@ -149,7 +152,7 @@ export default function StockPage() {
       setReorderAmount(10);
     } catch (error: any) {
       console.error("Restock error:", error);
-      alert(`Backend rejected: ${error.message}`);
+      toast.error(`Backend rejected: ${error.message}`);
     } finally {
       setIsReordering(false);
     }
@@ -163,7 +166,7 @@ export default function StockPage() {
     if (!targetProduct) return;
 
     if (!targetProduct.id || targetProduct.id === "undefined" || isNaN(Number(targetProduct.id))) {
-       alert("Invalid Product ID.");
+       toast.error("Invalid Product ID.");
        return;
     }
 
@@ -171,7 +174,7 @@ export default function StockPage() {
     try {
       const newQuantity = Number(targetProduct.quantity) + Number(addStockAmount);
 
-      const response = await fetch(`http://localhost:5000/api/products/${targetProduct.id}/quantity`, {
+      const response = await fetch(`${API_URL}/api/products/${targetProduct.id}/quantity`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: newQuantity })
@@ -199,7 +202,7 @@ export default function StockPage() {
       setAddStockAmount(10);
     } catch (error: any) {
       console.error("Add stock error:", error);
-      alert(`Backend rejected: ${error.message}`);
+      toast.error(`Backend rejected: ${error.message}`);
     } finally {
       setIsAddingStock(false);
     }

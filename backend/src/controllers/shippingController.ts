@@ -1,15 +1,17 @@
 import { Request, Response } from 'express';
 import shippingService from '../services/shippingService';
+import orderService from '../services/orderService';
 import { CreateShippingRequest, UpdateShippingRequest } from '../types/shipping';
 
 const parseStringParam = (param: string | string[]): string => (Array.isArray(param) ? param[0] : param);
 
 export const getAllShippings = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { status, order_id, limit, offset } = req.query;
+        const { status, order_id, limit, offset, seller_id } = req.query;
         const filters: any = {};
         if (status) filters.status = parseStringParam(status as any);
         if (order_id) filters.order_id = parseInt(parseStringParam(order_id as any));
+        if (seller_id) filters.seller_id = parseStringParam(seller_id as any);
         if (limit) filters.limit = parseInt(parseStringParam(limit as any));
         if (offset) filters.offset = parseInt(parseStringParam(offset as any));
 
@@ -50,6 +52,7 @@ export const createShipping = async (req: Request, res: Response): Promise<void>
         }
 
         const shipping = await shippingService.createShipping(body);
+        await orderService.updateOrderStatus(body.order_id, 'standby');
         res.status(201).json(shipping);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -61,6 +64,9 @@ export const updateShipping = async (req: Request, res: Response): Promise<void>
         const { id } = req.params;
         const updates = req.body as UpdateShippingRequest;
         const shipping = await shippingService.updateShipping(parseInt(parseStringParam(id)), updates);
+        if (updates.status === 'delivered') {
+            await orderService.updateOrderStatus(shipping.order_id, 'delivered');
+        }
         res.status(200).json(shipping);
     } catch (err: any) {
         if (err.message === 'Shipping not found') res.status(404).json({ error: err.message });

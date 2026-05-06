@@ -21,11 +21,41 @@ export interface Order {
     items?: OrderItem[];
 }
 
-export const getAllOrders = async (): Promise<Order[]> => {
-    const { data, error } = await supabase
+export const getAllOrders = async (filters?: { status?: string; seller_id?: string; }): Promise<Order[]> => {
+    let query: any = supabase
         .from('orders')
         .select('*, order_items(*)')
         .order('created_at', { ascending: false });
+
+    if (filters?.seller_id) {
+        const { data: products, error: productsError } = await supabase
+            .from('products')
+            .select('id')
+            .eq('seller_id', filters.seller_id);
+
+        if (productsError) throw new Error(productsError.message);
+
+        const productIds = (products || []).map((product: any) => product.id).filter(Boolean);
+        if (productIds.length === 0) return [];
+
+        const { data: orderItems, error: orderItemsError } = await supabase
+            .from('order_items')
+            .select('order_id')
+            .in('product_id', productIds);
+
+        if (orderItemsError) throw new Error(orderItemsError.message);
+
+        const orderIds = Array.from(
+            new Set((orderItems || []).map((item: any) => item.order_id).filter(Boolean))
+        );
+
+        if (orderIds.length === 0) return [];
+        query = query.in('id', orderIds);
+    }
+
+    if (filters?.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
     return (data as any) || [];
