@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PaymentService } from '../services/paymentService';
-import { PaymentMethod } from '../types/payment';
+import { PaymentType } from '../types/payment';
 import { supabase, supabaseAdmin } from '../SupabaseClient';
 
 const parsePositiveInteger = (value: unknown): number | null => {
@@ -342,7 +342,7 @@ export const createPaymentMethod = async (req: Request, res: Response): Promise<
     }
 };
 
-export const updatePaymentMethod = async (req: Request, res: Response): Promise<void> => {
+export const updatePaymentMethodForUser = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
         const { type, is_default, details, user_id } = req.body;
@@ -373,7 +373,7 @@ export const updatePaymentMethod = async (req: Request, res: Response): Promise<
     }
 };
 
-export const deletePaymentMethod = async (req: Request, res: Response): Promise<void> => {
+export const deletePaymentMethodForUser = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
 

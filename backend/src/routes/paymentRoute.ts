@@ -3,12 +3,13 @@ import {
     createPayment,
     getPaymentById,
     getAllPayments,
-    refundPayment,
-    getPaymentStatistics,
+    getPaymentsByUserId,
     createPaymentMethod,
     getUserPaymentMethods,
     updatePaymentMethod,
-    deletePaymentMethod
+    deletePaymentMethod,
+    updatePaymentMethodForUser,
+    deletePaymentMethodForUser
 } from '../controllers/paymentController';
 
 const paymentRouter: Router = express.Router();
@@ -46,10 +47,10 @@ paymentRouter.post('/methods', createPaymentMethod);
 paymentRouter.get('/methods/:userId', getUserPaymentMethods);
 
 // Update a saved method
-paymentRouter.put('/methods/:id', updatePaymentMethod);
+paymentRouter.put('/methods/:id', updatePaymentMethodForUser);
 
 // Delete a saved method
-paymentRouter.delete('/methods/:id', deletePaymentMethod);
+paymentRouter.delete('/methods/:id', deletePaymentMethodForUser);
 
 // ==========================================
 // DYNAMIC / PARAMETER ROUTES (MUST GO LAST)
